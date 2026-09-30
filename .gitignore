@@ -56,4 +56,5 @@ logs/
 
 # 备份文件不入库(*.bak-*)
 *.bak-*
- logs/
+logs/
+sessions/
