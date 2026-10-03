@@ -45,7 +45,6 @@ build/
 .env.*
 !.env.example
 *.local.properties
-config.properties
 secrets/
 *.pem
 *.key
