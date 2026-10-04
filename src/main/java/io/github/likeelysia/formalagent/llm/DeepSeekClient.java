@@ -1,5 +1,6 @@
 package io.github.likeelysia.formalagent.llm;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.likeelysia.formalagent.chat.Message;
 import io.github.likeelysia.formalagent.config.AppConfig;
@@ -15,6 +16,9 @@ import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.List;
 import org.springframework.stereotype.Component;
+import org.springframework.retry.annotation.Backoff;
+import org.springframework.retry.annotation.Recover;
+import org.springframework.retry.annotation.Retryable;
 
 @Component
 public class DeepSeekClient implements LlmClient {
@@ -31,6 +35,14 @@ public class DeepSeekClient implements LlmClient {
                 .build();
     }
 
+    @Retryable(
+            value = TransientApiException.class,          // 只重试"瞬时故障"
+            maxAttemptsExpression = "${llm.maxAttempts:3}",  // 总尝试次数
+            backoff = @Backoff(
+                    delayExpression = "${llm.retryBaseMs:500}",  // 退避基数
+                    maxDelayExpression = "${llm.retryMaxMs:8000}", // 退避上限
+                    multiplier = 2.0,                            // 指数:500→1000→2000…
+                    random = true))                              // 抖动,避免惊群
     @Override
     public String chat(List<Message> history, ChatOptions options) {
         String apiKey = System.getenv("DEEPSEEK_API_KEY");
@@ -38,7 +50,6 @@ public class DeepSeekClient implements LlmClient {
             throw new AgentException("没读到 DEEPSEEK_API_KEY —— 先配置环境变量再重启 IDEA");
         }
         try {
-            // 强类型 DTO → JSON(取代手拼字符串模板)
             String body = mapper.writeValueAsString(new ChatRequest(
                     config.model(), history, config.maxTokens(),
                     options.jsonMode() ? ChatRequest.ResponseFormat.JSON : null));
@@ -47,6 +58,7 @@ public class DeepSeekClient implements LlmClient {
                     .uri(URI.create(config.apiUrl()))
                     .header("Content-Type", "application/json")
                     .header("Authorization", "Bearer " + apiKey)
+                    .timeout(Duration.ofSeconds(config.requestTimeoutSeconds()))   // ← 新增:读取超时
                     .POST(HttpRequest.BodyPublishers.ofString(body))
                     .build();
 
@@ -58,23 +70,36 @@ public class DeepSeekClient implements LlmClient {
                     body.length(), response.body().length());
             if (config.debug()) System.out.println("[debug] 请求体:" + body);
 
-            // 非 2xx 一律当失败:把状态码和返回体带上,方便定位(别解析了才发现空)
-            if (response.statusCode() < 200 || response.statusCode() >= 300) {
-                throw new AgentException("DeepSeek 返回错误(" + response.statusCode() + "):"
-                        + abbreviate(response.body()));
+            int code = response.statusCode();
+            if (code == 429 || code >= 500) {
+                // 瞬时故障 → 抛可重试异常(交给 @Retryable 重试)
+                throw new TransientApiException("DeepSeek 暂时不可用(" + code + "):" + abbreviate(response.body()));
+            }
+            if (code < 200 || code >= 300) {
+                // 业务错误 → 直接失败,不重试
+                throw new AgentException("DeepSeek 返回错误(" + code + "):" + abbreviate(response.body()));
             }
 
-            // JSON → 强类型 DTO(取代 readTree().path().path() 的裸导航)
             ChatResponse parsed = mapper.readValue(response.body(), ChatResponse.class);
             if (parsed.choices() == null || parsed.choices().isEmpty()) {
-                throw new AgentException("DeepSeek 返回里没有 choices:" + abbreviate(response.body()));
+                throw new TransientApiException("DeepSeek 返回里没有 choices:" + abbreviate(response.body()));
             }
             return parsed.choices().get(0).message().content().strip();
 
-        } catch (IOException | InterruptedException e) {
-            if (e instanceof InterruptedException) Thread.currentThread().interrupt();  // ① 恢复中断标记
-            throw new AgentException("调用 DeepSeek 失败:" + e.getMessage(), e);        // ② 包装成自己的异常
+        } catch (JsonProcessingException e) {          // 注意:它是 IOException 的子类,要先接
+            throw new AgentException("JSON 处理失败:" + e.getMessage(), e);   // 确定性错误,不重试
+        } catch (IOException e) {
+            throw new TransientApiException("网络异常:" + e.getMessage(), e);  // 瞬时故障,可重试
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new AgentException("调用被中断", e);
         }
+    }
+
+    /** 重试用尽后的兜底:把最后的瞬时异常收敛成统一的 AgentException。 */
+    @Recover
+    public String recover(TransientApiException e, List<Message> history, ChatOptions options) {
+        throw new AgentException("调用 DeepSeek 失败(已重试用尽):" + e.getMessage(), e);
     }
 
     /** 出错时截断返回体,避免把整页 HTML/JSON 刷进日志。 */

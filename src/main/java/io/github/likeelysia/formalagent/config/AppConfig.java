@@ -27,10 +27,26 @@ public class AppConfig {
     @Value("${app.debug:false}")
     private boolean debug;
 
+    @Value("${llm.requestTimeoutSeconds:60}")
+    private int requestTimeoutSeconds;
+
+    @Value("${llm.maxAttempts:3}")
+    private int maxAttempts;
+
+    @Value("${llm.retryBaseMs:500}")
+    private long retryBaseMs;
+
+    @Value("${llm.retryMaxMs:8000}")
+    private long retryMaxMs;
+
     // 方法名保持不变 → 调用点改动最小
-    public  String apiUrl() { return apiUrl; }
-    public  String model() { return model; }
-    public  int maxTokens() { return maxTokens; }
-    public  int timeoutSeconds() { return timeoutSeconds; }
-    public  boolean debug() { return debug; }
+    public String apiUrl() { return apiUrl; }
+    public String model() { return model; }
+    public int maxTokens() { return maxTokens; }
+    public int timeoutSeconds() { return timeoutSeconds; }
+    public boolean debug() { return debug; }
+    public int requestTimeoutSeconds() { return requestTimeoutSeconds; }
+    public int maxAttempts()           { return maxAttempts; }
+    public long retryBaseMs()          { return retryBaseMs; }
+    public long retryMaxMs()           { return retryMaxMs; }
 }

@@ -8,7 +8,9 @@ import io.github.likeelysia.formalagent.store.SessionStore;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.retry.annotation.EnableRetry;
 
+@EnableRetry(proxyTargetClass = true)   // 启用重试切面(CGLIB 代理,注解更好使)
 @Configuration                                          // 我是一张"装配图纸"
 @ComponentScan("io.github.likeelysia.formalagent")       // 去这个包(含子包)找 @Component
 public class SpringConfig {
