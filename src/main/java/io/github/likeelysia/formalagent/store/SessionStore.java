@@ -10,33 +10,42 @@ import java.nio.file.Paths;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import io.github.likeelysia.formalagent.chat.ChatSession;
+import org.springframework.stereotype.Component;
 
 /**
  * 会话存档/读档。
  *
  * <p>.bin = Java 原生序列化(二进制,学机制用);.json = 给人看的可读版。
  *
- * <p>2026-09-30 小改:每个方法都加了「可指定目录」的重载。
- * 目的是让<b>单元测试</b>传入一个临时目录,不会把测试数据写进真实的 sessions/。
- * 原来的调用方式(save(s)/load(name)/exportJson(s))完全没变,行为一致。
+ * <p><b>2026-10-04 重构:由「静态工具类」改为「Spring 管理的 bean」。</b>
+ * 原因:它依赖文件系统与 ObjectMapper,属于"有依赖、可能被替换"的<b>服务</b>,
+ * 而不是无状态的纯函数工具。静态方法无法被容器注入、无法被 AOP 代理、
+ * 也无法多态替换(将来从"本地文件"换成"数据库/云存储"时会被卡住)。
+ *
+ * <p>原来的调用方式(静态)已变为<b>实例方法</b>:调用方从容器取 bean 即可,
+ * 依赖由容器统一装配。
  */
-public final class SessionStore {
+@Component
+public class SessionStore {
 
     /** 默认存放目录:sessions/(程序正常运行时用这个) */
     private static final Path DEFAULT_DIR = Paths.get("sessions");
 
-    private SessionStore() {
+    private final ObjectMapper mapper;               // ← 由容器注入的统一实例
+
+    public SessionStore(ObjectMapper mapper) {
+        this.mapper = mapper;
     }
 
     // ==================== 存档 ====================
 
     /** 【存档】写进默认目录 sessions/ */
-    public static void save(ChatSession session) {
+    public void save(ChatSession session) {
         save(session, DEFAULT_DIR);
     }
 
     /** 【存档】写进指定目录(测试会传 @TempDir 的临时目录) */
-    public static void save(ChatSession session, Path dir) {
+    public void save(ChatSession session, Path dir) {
         try {
             Files.createDirectories(dir);
             Path file = dir.resolve(session.getName() + ".bin");
@@ -52,12 +61,12 @@ public final class SessionStore {
     // ==================== 读档 ====================
 
     /** 【读档】从默认目录 sessions/ 读 */
-    public static ChatSession load(String name) {
+    public ChatSession load(String name) {
         return load(name, DEFAULT_DIR);
     }
 
     /** 【读档】从指定目录读;文件不存在返回 null(第一次运行的正常情况) */
-    public static ChatSession load(String name, Path dir) {
+    public ChatSession load(String name, Path dir) {
         Path file = dir.resolve(name + ".bin");
         if (!Files.exists(file)) {
             return null;                          // 没档可读
@@ -74,17 +83,16 @@ public final class SessionStore {
     // ==================== 导出可读 JSON ====================
 
     /** 【导出】写进默认目录 sessions/ */
-    public static void exportJson(ChatSession session) {
+    public void exportJson(ChatSession session) {
         exportJson(session, DEFAULT_DIR);
     }
 
     /** 【导出】写进指定目录 */
-    public static void exportJson(ChatSession session, Path dir) {
+    public void exportJson(ChatSession session, Path dir) {
         try {
             Files.createDirectories(dir);
             Path file = dir.resolve(session.getName() + ".json");
-            new ObjectMapper()
-                    .writerWithDefaultPrettyPrinter()          // 缩进美化,方便人看
+            mapper.writerWithDefaultPrettyPrinter()          // 缩进美化,方便人看
                     .writeValue(file.toFile(), session.getMessages());
             System.out.println("[SessionStore] 已导出可读版:" + file.toAbsolutePath());
         } catch (IOException e) {

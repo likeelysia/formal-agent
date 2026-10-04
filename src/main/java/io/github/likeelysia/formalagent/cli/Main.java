@@ -51,9 +51,10 @@ public class Main {
             }
         }
 
-        // ⑤ 存档 + 关容器
-        SessionStore.save(service.getSession());
-        SessionStore.exportJson(service.getSession());
+        // ⑤ 存档 + 关容器(SessionStore 现在是 bean,从容器取)
+        SessionStore store = ctx.getBean(SessionStore.class);
+        store.save(service.getSession());
+        store.exportJson(service.getSession());
         scanner.close();
         ctx.close();
     }

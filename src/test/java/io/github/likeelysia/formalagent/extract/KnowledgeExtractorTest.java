@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.likeelysia.formalagent.chat.Message;
 import io.github.likeelysia.formalagent.exception.AgentException;
 import io.github.likeelysia.formalagent.llm.LlmClient;
@@ -32,6 +33,11 @@ class KnowledgeExtractorTest {
         }
     }
 
+    /** 测试里手动装配:一个替身客户端 + 一个普通 ObjectMapper 就够了(不用起 Spring 容器)。 */
+    private static KnowledgeExtractor extractor(LlmClient client) {
+        return new KnowledgeExtractor(client, new ObjectMapper());
+    }
+
     @Test
     @DisplayName("正常 JSON → 解析出两个知识点,字段都对")
     void parsesPlainJson() {
@@ -39,7 +45,7 @@ class KnowledgeExtractorTest {
                 "[{\"name\":\"IoC\",\"detail\":\"控制反转,把创建对象的权力交给容器\"},"
                         + "{\"name\":\"DI\",\"detail\":\"依赖注入,容器把依赖塞进对象\"}]");
 
-        List<KnowledgePoint> points = new KnowledgeExtractor(fake).extract("IoC 就是控制反转……");
+        List<KnowledgePoint> points = extractor(fake).extract("IoC 就是控制反转……");
 
         assertEquals(2, points.size());
         assertEquals("IoC", points.get(0).name());
@@ -52,7 +58,7 @@ class KnowledgeExtractorTest {
         FakeLlmClient fake = new FakeLlmClient(
                 "好的,结果如下:\n```json\n[{\"name\":\"注解\",\"detail\":\"给代码贴的标签\"}]\n```\n希望有帮助!");
 
-        List<KnowledgePoint> points = new KnowledgeExtractor(fake).extract("注解是……");
+        List<KnowledgePoint> points = extractor(fake).extract("注解是……");
 
         assertEquals(1, points.size());
         assertEquals("注解", points.get(0).name());
@@ -63,14 +69,14 @@ class KnowledgeExtractorTest {
     void blankChunkSendsNothing() {
         FakeLlmClient fake = new FakeLlmClient("[]");
 
-        assertTrue(new KnowledgeExtractor(fake).extract("   \n  ").isEmpty());
+        assertTrue(extractor(fake).extract("   \n  ").isEmpty());
         assertEquals(0, fake.calls);
     }
 
     @Test
     @DisplayName("模型返回空数组 [] → 空列表(不是 null)")
     void emptyArrayGivesEmptyList() {
-        List<KnowledgePoint> points = new KnowledgeExtractor(new FakeLlmClient("[]")).extract("目录:第一章");
+        List<KnowledgePoint> points = extractor(new FakeLlmClient("[]")).extract("目录:第一章");
 
         assertTrue(points.isEmpty());
     }
@@ -80,7 +86,7 @@ class KnowledgeExtractorTest {
     void badResponseThrows() {
         FakeLlmClient fake = new FakeLlmClient("抱歉,我无法完成这个请求。");
 
-        AgentException e = assertThrows(AgentException.class, () -> new KnowledgeExtractor(fake).extract("随便一段"));
+        AgentException e = assertThrows(AgentException.class, () -> extractor(fake).extract("随便一段"));
 
         assertTrue(e.getMessage().contains("抱歉"), "报错信息里应该带上模型的原始返回,方便排查");
     }
@@ -90,7 +96,7 @@ class KnowledgeExtractorTest {
     void sendsSystemAndUser() {
         FakeLlmClient fake = new FakeLlmClient("[]");
 
-        new KnowledgeExtractor(fake).extract("第一段内容");
+        extractor(fake).extract("第一段内容");
 
         assertEquals(2, fake.lastHistory.size());
         assertEquals("system", fake.lastHistory.get(0).getRole());

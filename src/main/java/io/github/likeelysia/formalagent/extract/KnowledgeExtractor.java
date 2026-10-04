@@ -33,10 +33,11 @@ public class KnowledgeExtractor {
               """;
 
     private final LlmClient client;
-    private final ObjectMapper mapper = new ObjectMapper();
+    private final ObjectMapper mapper;               // ← 容器注入的统一实例(不再是各自 new)
 
-    public KnowledgeExtractor(LlmClient client) {
+    public KnowledgeExtractor(LlmClient client, ObjectMapper mapper) {
         this.client = client;
+        this.mapper = mapper;
     }
 
     /** 一块文本 → 这块里的知识点列表。空文本直接返回空列表(不浪费一次请求)。 */

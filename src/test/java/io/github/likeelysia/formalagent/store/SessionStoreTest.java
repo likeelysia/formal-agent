@@ -9,6 +9,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -22,8 +23,12 @@ import io.github.likeelysia.formalagent.chat.Message;
 /**
  * SessionStore 的单元测试(存档 / 读档 / 导出 JSON)。
  *
+ * <p>2026-10-04 重构:SessionStore 由静态工具类变为 bean 后,测试改为
+ * <b>自己 new 一个实例</b>(测试里不需要启动 Spring 容器,手动注入一个 ObjectMapper 即可)。
+ * 这正是"依赖注入"的红利:依赖可以随手替换成测试替身。
+ *
  * <p>关键角色 <b>@TempDir</b>:JUnit 会给每个测试方法注入一个"临时目录",
- * 测试跑完**自动删除**。所以这些测试只写临时目录(通过带 dir 的重载),
+ * 测试跑完<b>自动删除</b>。所以这些测试只写临时目录(通过带 dir 的重载),
  * <b>绝不会碰到你真实的 sessions/ 目录</b>。
  */
 class SessionStoreTest {
@@ -31,6 +36,14 @@ class SessionStoreTest {
     /** JUnit 自动创建并注入的临时目录(每个测试方法各自独立) */
     @TempDir
     Path tempDir;
+
+    /** 被测对象:手动注入一个 ObjectMapper 构造出来 */
+    private SessionStore store;
+
+    @BeforeEach
+    void setUp() {
+        store = new SessionStore(new ObjectMapper());
+    }
 
     @Test
     @DisplayName("存档 → 读档:名字、条数、内容都要一模一样(往返测试)")
@@ -42,8 +55,8 @@ class SessionStoreTest {
         original.add(new Message("assistant", "喵~"));
 
         // ② 存档 + 读档
-        SessionStore.save(original, tempDir);
-        ChatSession loaded = SessionStore.load("unit-test", tempDir);
+        store.save(original, tempDir);
+        ChatSession loaded = store.load("unit-test", tempDir);
 
         // ③ 断言
         assertNotNull(loaded, "存过档就应该能读回来");
@@ -55,7 +68,7 @@ class SessionStoreTest {
     @Test
     @DisplayName("读一个不存在的档:应当返回 null,而不是报错")
     void loadMissingShouldReturnNull() {
-        assertNull(SessionStore.load("这个会话不存在", tempDir));
+        assertNull(store.load("这个会话不存在", tempDir));
     }
 
     @Test
@@ -64,7 +77,7 @@ class SessionStoreTest {
         ChatSession s = new ChatSession("bin-test");
         s.add(new Message("user", "x"));
 
-        SessionStore.save(s, tempDir);
+        store.save(s, tempDir);
 
         assertTrue(Files.exists(tempDir.resolve("bin-test.bin")), "应当生成 bin-test.bin");
     }
@@ -75,7 +88,7 @@ class SessionStoreTest {
         ChatSession s = new ChatSession("json-test");
         s.add(new Message("user", "你好"));
 
-        SessionStore.exportJson(s, tempDir);
+        store.exportJson(s, tempDir);
 
         Path json = tempDir.resolve("json-test.json");
         assertTrue(Files.exists(json), "应当生成 json-test.json");
@@ -92,6 +105,6 @@ class SessionStoreTest {
     @DisplayName("默认目录的重载:读不存在的档也返回 null(且不写任何文件)")
     void defaultDirOverloadShouldStillWork() {
         // 只做"读"操作 → 不会污染真实的 sessions/
-        assertNull(SessionStore.load("__肯定不存在的会话名__"));
+        assertNull(store.load("__肯定不存在的会话名__"));
     }
 }

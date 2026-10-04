@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.likeelysia.formalagent.chat.Message;
 import io.github.likeelysia.formalagent.doc.DocPipeline;
 import io.github.likeelysia.formalagent.doc.PlainTextReader;
@@ -49,6 +50,11 @@ class ExtractServiceTest {
         return "[{\"name\":\"" + name + "\",\"detail\":\"" + detail + "\"}]";
     }
 
+    /** 手动装配提取器:桩客户端 + 普通 ObjectMapper(测试不起 Spring 容器) */
+    private static KnowledgeExtractor extractor(LlmClient client) {
+        return new KnowledgeExtractor(client, new ObjectMapper());
+    }
+
     @TempDir Path tmp;
     private Path file;
     private DocPipeline pipeline;
@@ -66,7 +72,7 @@ class ExtractServiceTest {
     void mergesAllChunks() {
         QueuedFake fake = new QueuedFake(json("K1", "d1"), json("K2", "d2"), json("K3", "d3"));
 
-        List<KnowledgePoint> points = new ExtractService(pipeline, new KnowledgeExtractor(fake)).extractFile(file);
+        List<KnowledgePoint> points = new ExtractService(pipeline, extractor(fake)).extractFile(file);
 
         assertEquals(3, points.size());
         assertEquals("K1", points.get(0).name());
@@ -79,7 +85,7 @@ class ExtractServiceTest {
     void dedupesByName() {
         QueuedFake fake = new QueuedFake(json("X", "第一次"), json("X", "第二次"), "[]");
 
-        List<KnowledgePoint> points = new ExtractService(pipeline, new KnowledgeExtractor(fake)).extractFile(file);
+        List<KnowledgePoint> points = new ExtractService(pipeline, extractor(fake)).extractFile(file);
 
         assertEquals(1, points.size());
         assertEquals("X", points.get(0).name());
@@ -91,7 +97,7 @@ class ExtractServiceTest {
     void emptyWhenNothingFound() {
         QueuedFake fake = new QueuedFake("[]", "[]", "[]");
 
-        List<KnowledgePoint> points = new ExtractService(pipeline, new KnowledgeExtractor(fake)).extractFile(file);
+        List<KnowledgePoint> points = new ExtractService(pipeline, extractor(fake)).extractFile(file);
 
         assertTrue(points.isEmpty());
         assertEquals(3, fake.calls);   // 三块都问了,只是都没东西
@@ -103,6 +109,6 @@ class ExtractServiceTest {
         QueuedFake fake = new QueuedFake("[]", "抱歉我做不到", "[]");
 
         assertThrows(AgentException.class,
-                () -> new ExtractService(pipeline, new KnowledgeExtractor(fake)).extractFile(file));
+                () -> new ExtractService(pipeline, extractor(fake)).extractFile(file));
     }
 }
