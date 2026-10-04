@@ -75,7 +75,7 @@ public class ChatServiceTest {
     @DisplayName("客户端抛 AgentException 时,send() 要如实往外抛(不吞异常)")
     void clientFailureShouldPropagate() {
         // LlmClient 只有一个抽象方法 → 可以直接用 lambda 造一个"必定失败"的实现
-        LlmClient failing = history -> {
+        LlmClient failing = (history, options) -> {
             throw new AgentException("网络炸了");
         };
         ChatService svc = new ChatService(failing, new ChatSession("t2"));

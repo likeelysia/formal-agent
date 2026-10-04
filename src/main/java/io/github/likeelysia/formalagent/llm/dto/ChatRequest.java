@@ -1,21 +1,26 @@
 package io.github.likeelysia.formalagent.llm.dto;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import io.github.likeelysia.formalagent.chat.Message;
 import java.util.List;
 
 /**
- * 一次「对话补全」请求体(对应 DeepSeek / OpenAI 的 /chat/completions 入参)。
+ * 一次「对话补全」请求体。
  *
- * <p>用 record 把请求体做成<b>强类型对象</b>,交给 Jackson 序列化 ——
- * 取代过去"手拼 JSON 字符串"的写法:字段名/类型在编译期即可校验,
- * 不会因为少一个引号、多一个换行就产出非法 JSON。
- *
- * <p>为什么用 {@code @JsonProperty("max_tokens")}:Java 习惯驼峰 {@code maxTokens},
- * 但 API 要下划线 {@code max_tokens},靠注解显式映射,比全局命名策略更安全(不影响其它字段)。
+ * <p>{@code @JsonInclude(NON_NULL)}:当 {@code responseFormat} 为 null(普通对话)时不序列化该字段,
+ * 避免发出 {@code "response_format": null} 这种多余/可能非法的内容。
  */
+@JsonInclude(JsonInclude.Include.NON_NULL)
 public record ChatRequest(
         String model,
         List<Message> messages,
-        @JsonProperty("max_tokens") int maxTokens) {
+        @JsonProperty("max_tokens") int maxTokens,
+        @JsonProperty("response_format") ResponseFormat responseFormat) {
+
+    /** 结构化输出开关:{"type":"json_object"}。 */
+    public record ResponseFormat(String type) {
+        /** 要求模型只输出合法 JSON。 */
+        public static final ResponseFormat JSON = new ResponseFormat("json_object");
+    }
 }

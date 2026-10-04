@@ -21,6 +21,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import io.github.likeelysia.formalagent.llm.ChatOptions;
 
 /**
  * ExtractService 的单元测试。
@@ -38,7 +39,7 @@ class ExtractServiceTest {
 
         QueuedFake(String... answers) { this.answers = new ArrayDeque<>(List.of(answers)); }
 
-        @Override public String chat(List<Message> history) {
+        @Override public String chat(List<Message> history, ChatOptions options) {
             calls++;
             String answer = answers.poll();
             if (answer == null) throw new IllegalStateException("桩没准备好第 " + calls + " 次答案");

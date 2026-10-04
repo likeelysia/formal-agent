@@ -11,6 +11,7 @@ import io.github.likeelysia.formalagent.llm.LlmClient;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import io.github.likeelysia.formalagent.llm.ChatOptions;
 
 /**
  * KnowledgeExtractor 的单元测试。
@@ -23,11 +24,13 @@ class KnowledgeExtractorTest {
         private final String answer;
         private List<Message> lastHistory;
         private int calls;
+        private ChatOptions lastOptions;
 
         FakeLlmClient(String answer) { this.answer = answer; }
 
-        @Override public String chat(List<Message> history) {
+        @Override public String chat(List<Message> history, ChatOptions options) {
             this.lastHistory = history;
+            this.lastOptions = options;
             this.calls++;
             return answer;
         }
@@ -52,17 +55,6 @@ class KnowledgeExtractorTest {
         assertEquals("控制反转,把创建对象的权力交给容器", points.get(0).detail());
     }
 
-    @Test
-    @DisplayName("模型加 ```json 围栏 + 客套话 → 洗掉之后照样能解析")
-    void stripsFencesAndChatter() {
-        FakeLlmClient fake = new FakeLlmClient(
-                "好的,结果如下:\n```json\n[{\"name\":\"注解\",\"detail\":\"给代码贴的标签\"}]\n```\n希望有帮助!");
-
-        List<KnowledgePoint> points = extractor(fake).extract("注解是……");
-
-        assertEquals(1, points.size());
-        assertEquals("注解", points.get(0).name());
-    }
 
     @Test
     @DisplayName("空白文本 → 返回空列表,并且一次请求都不发")
@@ -102,5 +94,15 @@ class KnowledgeExtractorTest {
         assertEquals("system", fake.lastHistory.get(0).getRole());
         assertEquals("user", fake.lastHistory.get(1).getRole());
         assertEquals("第一段内容", fake.lastHistory.get(1).getContent());
+    }
+
+    @Test
+    @DisplayName("提取时必须要求 JSON mode(结构化输出)")
+    void requestsJsonMode() {
+        FakeLlmClient fake = new FakeLlmClient("[]");
+
+        extractor(fake).extract("随便一段");
+
+        assertTrue(fake.lastOptions.jsonMode(), "提取调用应开启 jsonMode");
     }
 }

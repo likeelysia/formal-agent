@@ -1,6 +1,16 @@
 package io.github.likeelysia.formalagent.llm;
 
-/** 大模型客户端:只回答一件事 —— "给我对话历史,还我模型回复"。 */
+import io.github.likeelysia.formalagent.chat.Message;
+import java.util.List;
+
+/** 大模型客户端:给我对话历史(+ 可选参数),还我模型回复。 */
 public interface LlmClient {
-    String chat(java.util.List<io.github.likeelysia.formalagent.chat.Message> history);
+
+    /** 带调参的对话(主方法)。 */
+    String chat(List<Message> history, ChatOptions options);
+
+    /** 普通对话的便捷重载:走默认参数。 */
+    default String chat(List<Message> history) {
+        return chat(history, ChatOptions.DEFAULT);
+    }
 }

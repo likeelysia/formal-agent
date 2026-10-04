@@ -32,15 +32,16 @@ public class DeepSeekClient implements LlmClient {
     }
 
     @Override
-    public String chat(List<Message> history) {
+    public String chat(List<Message> history, ChatOptions options) {
         String apiKey = System.getenv("DEEPSEEK_API_KEY");
         if (apiKey == null || apiKey.isBlank()) {
             throw new AgentException("没读到 DEEPSEEK_API_KEY —— 先配置环境变量再重启 IDEA");
         }
         try {
             // 强类型 DTO → JSON(取代手拼字符串模板)
-            String body = mapper.writeValueAsString(
-                    new ChatRequest(config.model(), history, config.maxTokens()));
+            String body = mapper.writeValueAsString(new ChatRequest(
+                    config.model(), history, config.maxTokens(),
+                    options.jsonMode() ? ChatRequest.ResponseFormat.JSON : null));
 
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(config.apiUrl()))

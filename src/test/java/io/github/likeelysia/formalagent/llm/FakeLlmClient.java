@@ -10,7 +10,7 @@ class FakeLlmClient implements LlmClient {
     private List<Message> lastHistory;
     FakeLlmClient(String answer) { this.answer = answer; }
 
-    @Override public String chat(List<Message> history) {
+    @Override public String chat(List<Message> history, ChatOptions options) {
         this.lastHistory = history;
         return answer;
     }
