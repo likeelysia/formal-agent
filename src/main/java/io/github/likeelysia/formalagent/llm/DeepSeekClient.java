@@ -17,15 +17,14 @@ import java.time.Duration;
 import java.util.List;
 import org.springframework.stereotype.Component;
 import org.springframework.retry.annotation.Backoff;
-import org.springframework.retry.annotation.Recover;
 import org.springframework.retry.annotation.Retryable;
 
 @Component
 public class DeepSeekClient implements LlmClient {
-
+    
     private final HttpClient client;                     // 重对象:构造时建一份,复用
     private final ObjectMapper mapper;                   // ← 容器注入的统一 JSON 序列化器
-    private final AppConfig config;                      // ← 配置也由容器塞进来
+    private final AppConfig config;// ← 配置也由容器塞进来
 
     public DeepSeekClient(AppConfig config, ObjectMapper mapper) {   // 单构造器,@Autowired 可省
         this.config = config;
@@ -37,12 +36,12 @@ public class DeepSeekClient implements LlmClient {
 
     @Retryable(
             value = TransientApiException.class,          // 只重试"瞬时故障"
-            maxAttemptsExpression = "${llm.maxAttempts:3}",  // 总尝试次数
+            maxAttemptsExpression = "${llm.maxAttempts:5}",  // 总尝试次数
             backoff = @Backoff(
-                    delayExpression = "${llm.retryBaseMs:500}",  // 退避基数
-                    maxDelayExpression = "${llm.retryMaxMs:8000}", // 退避上限
-                    multiplier = 2.0,                            // 指数:500→1000→2000…
-                    random = true))                              // 抖动,避免惊群
+                    delayExpression = "${llm.retryBaseMs:2000}",  // 退避基数
+                    maxDelayExpression = "${llm.retryMaxMs:20000}",// 退避上限
+                    multiplier = 2.0,                            // 指数:2000→4000→8000…
+                    random = false))                             // 确定退避(限流场景随机可能退到 0ms)
     @Override
     public String chat(List<Message> history, ChatOptions options) {
         String apiKey = System.getenv("DEEPSEEK_API_KEY");
@@ -94,12 +93,6 @@ public class DeepSeekClient implements LlmClient {
             Thread.currentThread().interrupt();
             throw new AgentException("调用被中断", e);
         }
-    }
-
-    /** 重试用尽后的兜底:把最后的瞬时异常收敛成统一的 AgentException。 */
-    @Recover
-    public String recover(TransientApiException e, List<Message> history, ChatOptions options) {
-        throw new AgentException("调用 DeepSeek 失败(已重试用尽):" + e.getMessage(), e);
     }
 
     /** 出错时截断返回体,避免把整页 HTML/JSON 刷进日志。 */

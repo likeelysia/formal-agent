@@ -54,12 +54,29 @@ public class KnowledgeExtractor {
     /** 把模型返回的文本"洗"成 JSON,再反序列化成对象列表。 */
     private List<KnowledgePoint> parse(String raw) {
         if (raw == null || raw.isBlank()) return List.of();
+        String json = extractJsonArray(raw);
         try {
-            List<KnowledgePoint> points = mapper.readValue(raw, new TypeReference<List<KnowledgePoint>>() {});
+            List<KnowledgePoint> points = mapper.readValue(json, new TypeReference<List<KnowledgePoint>>() {});
             return List.copyOf(points);
         } catch (Exception e) {
             throw new AgentException("模型返回的不是预期的 JSON 数组:" + abbreviate(raw), e);
         }
+    }
+
+    /** 去掉 Markdown 代码围栏等噪音,并截取最外层的 [...]。 */
+    private static String extractJsonArray(String raw) {
+        String s = raw.strip();
+        if (s.startsWith("```")) {
+            int nl = s.indexOf('\n');
+            if (nl >= 0) s = s.substring(nl + 1);
+            int fence = s.lastIndexOf("```");
+            if (fence >= 0) s = s.substring(0, fence);
+            s = s.strip();
+        }
+        int start = s.indexOf('[');
+        int end = s.lastIndexOf(']');
+        if (start >= 0 && end > start) s = s.substring(start, end + 1);
+        return s;
     }
 
     private String abbreviate(String s) {

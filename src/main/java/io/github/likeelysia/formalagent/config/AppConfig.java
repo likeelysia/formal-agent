@@ -39,6 +39,21 @@ public class AppConfig {
     @Value("${llm.retryMaxMs:8000}")
     private long retryMaxMs;
 
+    @Value("${vision.api.url}")
+    private String visionApiUrl;
+
+    @Value("${vision.model}")
+    private String visionModel;
+
+    @Value("${vision.maxTokens:4096}")
+    private int visionMaxTokens;
+
+    @Value("${embedding.url:http://127.0.0.1:8090}")
+    private String embeddingUrl;
+
+    @Value("${embedding.model:bge-small-zh-v1.5}")
+    private String embeddingModel;
+
     // 方法名保持不变 → 调用点改动最小
     public String apiUrl() { return apiUrl; }
     public String model() { return model; }
@@ -49,4 +64,9 @@ public class AppConfig {
     public int maxAttempts()           { return maxAttempts; }
     public long retryBaseMs()          { return retryBaseMs; }
     public long retryMaxMs()           { return retryMaxMs; }
+    public String visionApiUrl()  { return visionApiUrl; }
+    public String visionModel()   { return visionModel; }
+    public int visionMaxTokens()  { return visionMaxTokens; }
+    public String embeddingUrl()   { return embeddingUrl; }
+    public String embeddingModel() { return embeddingModel; }
 }

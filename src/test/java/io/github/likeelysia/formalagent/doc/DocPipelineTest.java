@@ -12,10 +12,14 @@ import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import io.github.likeelysia.formalagent.doc.ReaderRegistry;
 
 class DocPipelineTest {
 
-    private final DocPipeline pipeline = new DocPipeline(new PlainTextReader(), new TextSplitter(20, 5));
+    private final DocPipeline pipeline = new DocPipeline(
+            new ReaderRegistry(new PlainTextReader(), new PdfReader((image, prompt) -> ""),
+                    new ImageReader((image, prompt) -> "")),
+            new TextSplitter(20, 5));
 
     @TempDir
     Path tmp;
@@ -26,11 +30,11 @@ class DocPipelineTest {
         Path f = tmp.resolve("note.md");
         Files.writeString(f, "aaaaaaaaaaaa\n\nbbbbbbbbbbbb\n\ncccccccccccc", StandardCharsets.UTF_8);
 
-        List<String> chunks = pipeline.load(f);
+        List<TextChunk> chunks = pipeline.load(f);
 
         assertEquals(3, chunks.size());
-        assertEquals("aaaaaaaaaaaa", chunks.get(0));
-        assertEquals("aaaaa\nbbbbbbbbbbbb", chunks.get(1));   // 开头 5 个 a = 重叠
+        assertEquals("aaaaaaaaaaaa", chunks.get(0).text());
+        assertEquals("aaaaa\nbbbbbbbbbbbb", chunks.get(1).text());   // 开头 5 个 a = 重叠
     }
 
     @Test

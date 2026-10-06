@@ -22,6 +22,9 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import io.github.likeelysia.formalagent.llm.ChatOptions;
+import io.github.likeelysia.formalagent.doc.PdfReader;
+import io.github.likeelysia.formalagent.doc.ReaderRegistry;
+import io.github.likeelysia.formalagent.doc.ImageReader;
 
 /**
  * ExtractService 的单元测试。
@@ -65,7 +68,10 @@ class ExtractServiceTest {
     void setUp() throws Exception {
         file = tmp.resolve("lesson.md");
         Files.writeString(file, TEXT, StandardCharsets.UTF_8);
-        pipeline = new DocPipeline(new PlainTextReader(), new TextSplitter(20, 5));
+        pipeline = new DocPipeline(
+                new ReaderRegistry(new PlainTextReader(), new PdfReader((image, prompt) -> ""),
+                        new ImageReader((image, prompt) -> "")),
+                new TextSplitter(20, 5));
     }
 
     @Test

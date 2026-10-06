@@ -11,7 +11,7 @@ public final class FileHint {
     private FileHint() { }   // 工具类:全是静态方法,不让 new
 
     /**
-     * 是能读的 .txt/.md 文件 → 返回它的 Path;否则返回 null(当普通聊天处理)。
+     * 是能读的文档(.txt/.md/.pdf/图片)→ 返回它的 Path;否则返回 null(当普通聊天处理)。
      * ⚠️ 先 strip、再去掉可能的成对引号(Windows 右键"复制文件地址"会带引号)。
      */
     public static Path asReadableFile(String raw) {
@@ -34,8 +34,20 @@ public final class FileHint {
         return text;
     }
 
+    /** 支持的扩展名(应和 ReaderRegistry 登记的格式保持一致)。 */
     private static boolean isReadableSuffix(String text) {
         String lower = text.toLowerCase(Locale.ROOT);
-        return lower.endsWith(".txt") || lower.endsWith(".md");
+        return lower.endsWith(".txt")
+                || lower.endsWith(".md")
+                || lower.endsWith(".pdf")
+                || lower.endsWith(".png")
+                || lower.endsWith(".jpg")
+                || lower.endsWith(".jpeg");
+    }
+    /** 是不是图片(用于把图片路由到"问答"而不是"提取")。 */
+    public static boolean isImage(Path path) {
+        String lower = path.getFileName().toString().toLowerCase(Locale.ROOT);
+        return lower.endsWith(".png") || lower.endsWith(".jpg")
+                || lower.endsWith(".jpeg") || lower.endsWith(".webp");
     }
 }

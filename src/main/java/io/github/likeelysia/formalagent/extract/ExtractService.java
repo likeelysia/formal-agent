@@ -6,6 +6,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.springframework.stereotype.Component;
+import io.github.likeelysia.formalagent.doc.TextChunk;
 
 /** 提取服务:一个文件 → 一份(去重后的)知识点清单。 */
 @Component
@@ -24,11 +25,9 @@ public class ExtractService {
      * 按"出现顺序"排;同名知识点只保留第一次出现的那条(说明也用它)。
      */
     public List<KnowledgePoint> extractFile(Path file) {
-        List<String> chunks = pipeline.load(file);
-
         Map<String, String> merged = new LinkedHashMap<>();      // key=知识点名 value=说明
-        for (String chunk : chunks) {
-            for (KnowledgePoint p : extractor.extract(chunk)) {
+        for (TextChunk chunk : pipeline.load(file)) {
+            for (KnowledgePoint p : extractor.extract(chunk.text())) {
                 merged.putIfAbsent(p.name(), p.detail());        // 已存在就不覆盖 → 保留第一次
             }
         }

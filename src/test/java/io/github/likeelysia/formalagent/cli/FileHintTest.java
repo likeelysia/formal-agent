@@ -9,6 +9,8 @@ import java.nio.file.Path;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** FileHint 的单元测试:纯字符串/路径判断,零 IO(除了写临时文件)。 */
 class FileHintTest {
@@ -31,6 +33,18 @@ class FileHintTest {
         assertEquals(md, FileHint.asReadableFile(md.toString()));
         assertEquals(txt, FileHint.asReadableFile(txt.toString()));
         assertEquals(upper, FileHint.asReadableFile(upper.toString()));
+    }
+
+    @Test
+    @DisplayName("认识 .pdf / .png / .jpg(大小写都行)")
+    void picksPdfAndImages() throws Exception {
+        Path pdf = write("book.pdf");
+        Path png = write("a.png");
+        Path jpg = write("a.JPG");
+
+        assertEquals(pdf, FileHint.asReadableFile(pdf.toString()));
+        assertEquals(png, FileHint.asReadableFile(png.toString()));
+        assertEquals(jpg, FileHint.asReadableFile(jpg.toString()));
     }
 
     @Test
@@ -65,5 +79,14 @@ class FileHintTest {
         assertNull(FileHint.asReadableFile(md + " 讲了什么"));
         assertNull(FileHint.asReadableFile("\"多态\"是什么"));
         assertNull(FileHint.asReadableFile(null));
+    }
+    @Test
+    @DisplayName("isImage:认 .png/.jpg/.jpeg,不认 .pdf/.txt")
+    void recognizesImages() {
+        assertTrue(FileHint.isImage(Path.of("a.png")));
+        assertTrue(FileHint.isImage(Path.of("a.JPG")));
+        assertTrue(FileHint.isImage(Path.of("a.jpeg")));
+        assertFalse(FileHint.isImage(Path.of("a.pdf")));
+        assertFalse(FileHint.isImage(Path.of("a.txt")));
     }
 }

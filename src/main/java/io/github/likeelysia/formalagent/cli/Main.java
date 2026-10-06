@@ -11,6 +11,7 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.Scanner;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
+import io.github.likeelysia.formalagent.service.QaService;
 
 public class Main {
 
@@ -26,8 +27,9 @@ public class Main {
         ChatService service = ctx.getBean(ChatService.class);
         ExtractService extractService = ctx.getBean(ExtractService.class);
         KnowledgeReport report = ctx.getBean(KnowledgeReport.class);
+        QaService qaService = ctx.getBean(QaService.class);
 
-        System.out.println("提示:直接说话=聊天;把 .md / .txt 文件路径粘进来=提取知识点。输入 exit 退出。");
+        System.out.println("提示:直接说话=聊天;粘 .md/.txt/.pdf=提取知识点;粘图片(.png/.jpg)=对照知识库回答。输入 exit 退出。");
 
         // ③ 循环
         Scanner scanner = new Scanner(System.in);
@@ -40,7 +42,11 @@ public class Main {
 
             Path file = FileHint.asReadableFile(line);     // ④ 先问一句:这是文件吗?
             if (file != null) {
-                extractFile(file, extractService, report); // 是文件 → 走提取,不进聊天记录
+                if (FileHint.isImage(file)) {
+                    askAboutImage(file, qaService);        // 图片 → 对照知识库回答
+                } else {
+                    extractFile(file, extractService, report); // 文档 → 提取知识点
+                }
                 continue;
             }
 
@@ -79,6 +85,15 @@ public class Main {
             if (points.size() > show) {
                 System.out.println("     …还有 " + (points.size() - show) + " 条,完整清单见上面的文件。");
             }
+        } catch (AgentException e) {
+            System.out.println("[出错] " + e.getMessage());
+        }
+    }
+    /** 图片 → 对照知识库回答。 */
+    private static void askAboutImage(Path image, QaService qaService) {
+        System.out.println("(识别到图片,正在对照知识库回答,请稍等…)");
+        try {
+            System.out.println("AI > " + qaService.ask(image));
         } catch (AgentException e) {
             System.out.println("[出错] " + e.getMessage());
         }

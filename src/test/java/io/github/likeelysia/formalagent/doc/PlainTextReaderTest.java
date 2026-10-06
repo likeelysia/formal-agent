@@ -12,6 +12,8 @@ import java.nio.file.Path;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import java.util.List;
 
 class PlainTextReaderTest {
 
@@ -24,9 +26,13 @@ class PlainTextReaderTest {
     @DisplayName("能原样读出 UTF-8 文本(含中文和 emoji)")
     void readsUtf8Text() throws IOException {
         Path f = tmp.resolve("a.txt");
-        Files.writeString(f, "第一行\n第二行:带中文和 emoji 🎯", StandardCharsets.UTF_8);
+        Files.writeString(f, "第一行\n第二行:带中文和 emoji ??", StandardCharsets.UTF_8);
 
-        assertEquals("第一行\n第二行:带中文和 emoji 🎯", reader.read(f));
+        List<TextSegment> segments = reader.read(f);
+
+        assertEquals(1, segments.size());
+        assertEquals("第一行\n第二行:带中文和 emoji ??", segments.get(0).text());
+        assertNull(segments.get(0).location(), "纯文本没有位置");
     }
 
     @Test
