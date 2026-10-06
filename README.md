@@ -43,10 +43,10 @@ semantic (embedding) retrieval** over that knowledge base — with citations.
   响应里带 `trace`(它到底调了哪些工具) —— 从"固定流水线"变成"会自己拿主意的 Agent"
 - **工具集**:`search_knowledge` / `knowledge_overview` / `get_knowledge_page` / **`calculator`**(自写安全表达式求值器)/ **`unit_convert`**
 - **混合检索 + 阈值**:向量 + 关键词加权;相似度不够就当作“没找到”(`fa.knowledge.min-score`)
-- **图片问答**:`POST /api/agent` 支持上传图片(multipart)→ 视觉识别 → Agent 回答
+- **多图问答**:`POST /api/agent`(multipart)一次可传 **最多 10 张**图 → 逐张视觉识别(按序号合并成一段文字)→ Agent 回答;单张失败自动跳过
 - **接口鉴权**:管理接口(`/api/ingest`)需请求头 `X-Admin-Key`
 - **Prompt 模板外置**:文案在 `resources/prompts/*.txt`
-- **网页前端**:内置单页问答界面(`http://localhost:8080/`)—— 文字提问 / 上传图片提问 / 看知识库 / 管理端上传入库
+- **网页前端**:内置单页问答界面(`http://localhost:8080/`)—— 文字提问 / 一次最多选 10 张图(缩略图可逐张删除,上传前自动压图)/ 看知识库 / 管理端上传入库
 - **多轮对话**:保留历史上下文,与 DeepSeek 循环对话
 - **会话存档**:Java 原生序列化(`.bin`)+ 可读 JSON 导出(`.json`)
 - **结构化输出**:调用时开启 JSON mode(`response_format=json_object`)
@@ -143,7 +143,7 @@ java -jar target/formal-agent-0.1.0-SNAPSHOT.jar --spring.profiles.active=dev
 | 方法 & 路径 | 作用 | 请求体示例 |
 |---|---|---|
 | `POST /api/agent` | **Agent 问答**(模型自己决定调哪些工具) | `{"question":"位移是多少?"}` → 返回 `answer` + `steps` + `trace` |
-| `POST /api/agent`(multipart) | **图片问答**:上传图片 → 视觉识别 → Agent 回答 | `file=@题目.png`(+ 可选 `question`) |
+| `POST /api/agent`(multipart) | **多图问答**:最多 10 张,逐张识别 → Agent 回答 | `files=@图1.png` `files=@图2.png`(+ 可选 `question`) |
 | `POST /api/ingest` | 教材入库(管理端)—— **上传文件**,不收“路径” | `multipart/form-data`,`file=@物理.pdf` |
 | `GET /api/knowledge` | 知识库概况 | `?sample=5` |
 | `GET /api/health` | 健康检查 | — |
@@ -222,6 +222,7 @@ variables, and `.gitignore` blocks common secret files as well as generated data
 - [x] **工具集**:`search_knowledge` / `knowledge_overview` / `get_knowledge_page` / `calculator` / `unit_convert`
 - [x] **hybrid 检索(向量 + 关键词)+ 相似度阈值**
 - [x] **接口支持图片**(multipart 上传)
+- [x] **多图提问**(一次最多 10 张;上传前浏览器内自动压图,缩略图可逐张删除)
 - [x] **管理接口鉴权**(`X-Admin-Key`)
 - [x] **Prompt 模板外置**(`resources/prompts/*.txt`)
 - [ ] 更多工具(联网搜索 —— 需配 Prompt Injection 防护)

@@ -18,16 +18,24 @@
     <section class="card chat">
         <div id="messages" class="messages">
             <div class="bubble bot">
-                你好!我是教材问答助手。直接提问,或者上传一张题目图片 —— 我会自己去知识库里查资料,再回答你。
+                你好!我是教材问答助手。直接提问,或者上传题目图片(一次最多 10 张)—— 我会自己去知识库里查资料,再回答你。
             </div>
         </div>
 
-        <div id="preview" class="preview" hidden></div>
+        <!-- 已选图片的缩略图区:每张右上角的 × 可以自己删掉 -->
+        <div id="previews" class="previews" hidden>
+            <div id="thumbs" class="thumbs"></div>
+            <div class="preview-bar">
+                <span id="imgCount" class="muted small">0 / 10</span>
+                <span id="previewMsg" class="hint"></span>
+                <button id="clearImages" type="button" class="link-btn">清空全部</button>
+            </div>
+        </div>
 
         <form id="ask-form" class="composer">
             <input id="question" type="text" placeholder="例如:沿闭合曲线跑一圈回到原点,位移是多少?" autocomplete="off">
-            <label class="icon-btn" title="上传图片提问">
-                🖼️<input id="image" type="file" accept="image/*" hidden>
+            <label class="icon-btn" id="pickLabel" title="上传图片提问(最多 10 张)">
+                🖼️<input id="images" type="file" accept="image/*" multiple hidden>
             </label>
             <button id="send" type="submit">提问</button>
         </form>
