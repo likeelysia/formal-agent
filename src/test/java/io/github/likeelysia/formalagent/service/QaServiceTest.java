@@ -36,7 +36,7 @@ class QaServiceTest {
     @DisplayName("图片 → 检索到知识点 → 提示词带上知识点和出处 → 返回回答")
     void answersWithKnowledge() {
         JsonKnowledgeStore store = new JsonKnowledgeStore(mapper, text -> new float[]{1f, 0f},
-                tmp.resolve("kb.json").toString());
+                tmp.resolve("kb.json").toString(), 0);
         store.addAll(List.of(new KnowledgeItem("1", "多态", "同一接口不同实现", "java.pdf", "第 12 页", "pdf")));
 
         VisionClient vision = (image, prompt) -> "多态";
@@ -57,7 +57,7 @@ class QaServiceTest {
     @DisplayName("知识库没有相关内容 → 如实说明,不硬编")
     void noKnowledge() {
         JsonKnowledgeStore store = new JsonKnowledgeStore(mapper, text -> new float[]{1f, 0f},
-                tmp.resolve("kb2.json").toString());
+                tmp.resolve("kb2.json").toString(), 0);
         VisionClient vision = (image, prompt) -> "量子力学";
 
         QaService qa = new QaService(vision, store, new CapturingLlm("x"), 5);

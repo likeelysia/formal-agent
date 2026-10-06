@@ -22,7 +22,8 @@ public record AppConfig(
         Llm llm,
         Deepseek deepseek,
         Vision vision,
-        Embedding embedding) {
+        Embedding embedding,
+        Upload upload) {
 
     /** 调用 LLM 的通用参数(超时 / 重试)。 */
     public record Llm(int requestTimeoutSeconds, int connectTimeoutSeconds,
@@ -39,5 +40,9 @@ public record AppConfig(
 
     /** 本地 embedding 服务。 */
     public record Embedding(String url, String model) {
+    }
+
+    /** 上传文件落盘目录(客户端上传的教材存这里)。 */
+    public record Upload(String dir) {
     }
 }

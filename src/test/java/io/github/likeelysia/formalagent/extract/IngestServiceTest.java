@@ -41,7 +41,7 @@ class IngestServiceTest {
         LlmClient fake = (history, options) -> "[{\"name\":\"K1\",\"detail\":\"d1\"}]";
         KnowledgeExtractor extractor = new KnowledgeExtractor(fake, mapper);
         store = new JsonKnowledgeStore(mapper, text -> new float[]{1f, 0f},
-                tmp.resolve("base.json").toString());
+                tmp.resolve("base.json").toString(), 0);
         service = new IngestService(pipeline, extractor, store);
     }
 

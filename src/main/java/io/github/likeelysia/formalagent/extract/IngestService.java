@@ -11,11 +11,15 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import org.springframework.stereotype.Component;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import io.github.likeelysia.formalagent.doc.TextChunk;
 
 /** 教材摄取:一个文件 → 知识点(带出处)→ 存进知识库。 */
 @Component
 public class IngestService {
+
+    private static final Logger log = LoggerFactory.getLogger(IngestService.class);
 
     private final DocPipeline pipeline;
     private final KnowledgeExtractor extractor;
@@ -40,7 +44,7 @@ public class IngestService {
                 points = extractor.extract(chunk.text());
             } catch (AgentException e) {                            // ← 单块提炼失败不拖垮整本
                 failedChunks.add(chunk.location());
-                System.out.println("[提炼] " + chunk.location() + " 失败,已跳过:" + e.getMessage());
+                log.warn("提炼 {} 失败,已跳过:{}", chunk.location(), e.getMessage());
                 continue;
             }
             for (KnowledgePoint p : points) {
@@ -50,7 +54,7 @@ public class IngestService {
             }
         }
         if (!failedChunks.isEmpty()) {
-            System.out.println("[提炼] ⚠ 有 " + failedChunks.size() + " 块没提炼成功:" + failedChunks);
+            log.warn("有 {} 块没提炼成功:{}", failedChunks.size(), failedChunks);
         }
 
         List<KnowledgeItem> result = List.copyOf(items.values());

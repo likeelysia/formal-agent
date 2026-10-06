@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.likeelysia.formalagent.chat.Message;
 import io.github.likeelysia.formalagent.exception.AgentException;
 import io.github.likeelysia.formalagent.llm.LlmClient;
+import io.github.likeelysia.formalagent.prompt.Prompts;
 import java.util.List;
 import org.springframework.stereotype.Component;
 import io.github.likeelysia.formalagent.llm.ChatOptions;
@@ -16,22 +17,7 @@ import io.github.likeelysia.formalagent.llm.ChatOptions;
 @Component
 public class KnowledgeExtractor {
 
-    /** 系统提示词:给模型看的"岗位说明书"。这是要反复调优的部分,所以单独抽出来放最上面。 */
-    private static final String SYSTEM_PROMPT = """
-                你是一个课程内容分析助手。用户会给你一段教材/讲义文本。
-                请从中提取"知识点",并以 json 数组的形式输出;只输出 json,不要输出任何其他文字,不要用 Markdown 代码块。
-
-                输出格式(json 数组):
-                [
-                  {"name": "知识点名称(短,不超过15字)", "detail": "一句话说明这个知识点是什么"},
-                  ...
-                ]
-
-                要求:
-                1. 只提炼这段文本里真正讲到的内容,不要自己补充文本以外的知识;
-                2. 同一个知识点只出现一次;
-                3. 如果这段文本里没有可提取的知识点(比如只是目录、页码),返回空数组 []。
-                """;
+    // 系统提示词已外置到 resources/prompts/knowledge-extract.txt
 
     private final LlmClient client;
     private final ObjectMapper mapper;               // ← 容器注入的统一实例(不再是各自 new)
@@ -46,7 +32,7 @@ public class KnowledgeExtractor {
         if (chunk == null || chunk.isBlank()) return List.of();
 
         String raw = client.chat(
-                List.of(new Message("system", SYSTEM_PROMPT), new Message("user", chunk)),
+                List.of(new Message("system", Prompts.get("knowledge-extract")), new Message("user", chunk)),
                 ChatOptions.JSON);          // ← 关键:要求模型以 JSON 输出
         return parse(raw);
     }

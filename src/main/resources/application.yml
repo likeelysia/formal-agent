@@ -3,6 +3,13 @@
 ##  · fa.* 前缀绑定到 AppConfig(@ConfigurationProperties)
 ##  · ${ENV_VAR:默认值} 写法 = 允许用环境变量覆盖
 ## ============================================================================
+spring:
+  application:
+    name: formal-agent
+
+server:
+  port: 8080          # HTTP 接口端口(可用 --server.port=xxxx 覆盖)
+
 fa:
   debug: false
 
@@ -34,6 +41,12 @@ fa:
   # ---- 知识库 ----
   knowledge:
     file: ${FA_KNOWLEDGE_FILE:knowledge/base.json}
+    # 混合检索的相似度阈值:低于它就当作“没找到”(0=不过滤)。调大更保守、调小更容易命中。
+    min-score: ${FA_KNOWLEDGE_MIN_SCORE:0.35}
+
+  # ---- 客户端上传的教材落盘目录 ----
+  upload:
+    dir: ${FA_UPLOAD_DIR:data/uploads}
 
   # ---- 教材切块 ----
   extract:
@@ -43,6 +56,10 @@ fa:
   # ---- 图片问答检索条数 ----
   qa:
     top-k: 5
+
+  # ---- 安全:管理接口密钥(为空 = 关闭鉴权,仅适合本地开发)----
+  security:
+    admin-key: ${FA_ADMIN_KEY:}
 
 ---
 ## ============================================================================

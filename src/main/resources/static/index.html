@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Formal Agent · 教材问答</title>
+    <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+
+<header>
+    <h1>📘 Formal Agent</h1>
+    <p class="sub">把教材变成「会自己查资料」的问答助手</p>
+</header>
+
+<main>
+    <!-- ==================== 对话区 ==================== -->
+    <section class="card chat">
+        <div id="messages" class="messages">
+            <div class="bubble bot">
+                你好!我是教材问答助手。直接提问,或者上传一张题目图片 —— 我会自己去知识库里查资料,再回答你。
+            </div>
+        </div>
+
+        <div id="preview" class="preview" hidden></div>
+
+        <form id="ask-form" class="composer">
+            <input id="question" type="text" placeholder="例如:沿闭合曲线跑一圈回到原点,位移是多少?" autocomplete="off">
+            <label class="icon-btn" title="上传图片提问">
+                🖼️<input id="image" type="file" accept="image/*" hidden>
+            </label>
+            <button id="send" type="submit">提问</button>
+        </form>
+    </section>
+
+    <!-- ==================== 侧栏 ==================== -->
+    <aside class="side">
+        <div class="card">
+            <h2>知识库</h2>
+            <div id="kb" class="muted">加载中…</div>
+        </div>
+
+        <details class="card">
+            <summary>🔧 管理:上传教材入库</summary>
+            <p class="muted small">需要管理密钥(服务端环境变量 FA_ADMIN_KEY)</p>
+            <input id="adminKey" type="password" placeholder="X-Admin-Key" autocomplete="off">
+            <input id="book" type="file" accept=".pdf,.txt,.md,image/*">
+            <button id="ingest" type="button">上传并入库</button>
+            <div id="ingestMsg" class="muted small"></div>
+        </details>
+    </aside>
+</main>
+
+<script src="/app.js"></script>
+</body>
+</html>

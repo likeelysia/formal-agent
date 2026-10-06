@@ -4,12 +4,15 @@ import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.likeelysia.formalagent.chat.ChatSession;
 import io.github.likeelysia.formalagent.chat.Message;
+import io.github.likeelysia.formalagent.prompt.Prompts;
 import io.github.likeelysia.formalagent.store.SessionStore;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.retry.annotation.EnableRetry;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @EnableRetry(proxyTargetClass = true)   // 启用重试切面(CGLIB 代理,注解更好使)
 @EnableConfigurationProperties(AppConfig.class)  // 把 fa.* 绑定成 AppConfig bean
@@ -17,7 +20,9 @@ import org.springframework.retry.annotation.EnableRetry;
 @ComponentScan("io.github.likeelysia.formalagent")       // 去这个包(含子包)找 @Component
 public class SpringConfig {
 
-    private static final String SYSTEM_PROMPT = "你是一个猫咪饲养员,回答不超过两句话。";
+    private static final Logger log = LoggerFactory.getLogger(SpringConfig.class);
+
+    // 系统提示词已外置到 resources/prompts/chat-system.txt
 
     /**
      * 全项目共享的 JSON 序列化器(@Bean = 容器里唯一一份)。
@@ -44,9 +49,9 @@ public class SpringConfig {
         ChatSession session = store.load("default");
         if (session == null) {
             session = new ChatSession("default");
-            session.add(new Message("system", SYSTEM_PROMPT));
+            session.add(new Message("system", Prompts.get("chat-system")));
         } else {
-            System.out.println("已恢复历史,共 " + session.getMessages().size() + " 条消息");
+            log.info("已恢复历史,共 {} 条消息", session.getMessages().size());
         }
         return session;
     }

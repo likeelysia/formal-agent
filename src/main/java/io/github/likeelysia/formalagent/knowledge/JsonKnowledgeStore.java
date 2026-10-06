@@ -15,20 +15,33 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 /**
  * JSON 文件实现:整个知识库就是一份 JSON 数组;启动读、写入存。
  *
- * <p><b>检索</b>:优先"向量检索" —— 把问题也算成向量,取余弦相似度最高的 topK 条;
- * embedding 服务不可用时<b>降级</b>成原来的关键词匹配(不会因为服务没开就搜不了)。
+ * <p><b>检索 = hybrid(混合)</b>:把两路分数加权合并 ——
+ * <pre>
+ *   score = 0.7 × 向量相似度(意思近不近) + 0.3 × 关键词命中率(字面像不像)
+ * </pre>
+ * 这样既能"换个说法也找得到"(向量),又能"精确名词一找一个准"(关键词)。
+ * 两路都算不出来时才降级为纯关键词(embedding 服务没开的情况)。
  *
- * <p>向量存放在 sidecar 文件({@code base.vectors.json}),避免每次启动重算;文件里带
- * "模型指纹",模型一换旧向量作废、自动重算。
+ * <p><b>阈值</b>:{@code score < fa.knowledge.min-score} 的直接丢掉 ——
+ * 避免"问不相干的东西也硬塞几条给模型",从源头减少一本正经地胡说。阈值设 0 = 不过滤。
+ *
+ * <p>向量存放在 sidecar 文件({@code base.vectors.json}),带模型指纹;模型一换自动重算。
  */
 @Component
 public class JsonKnowledgeStore implements KnowledgeStore {
+
+    private static final Logger log = LoggerFactory.getLogger(JsonKnowledgeStore.class);
+
+    /** 向量权重(剩下给关键词)。留成常量,等有真实评测数据再考虑外置。 */
+    private static final double VECTOR_WEIGHT = 0.7;
 
     /** 向量 sidecar 的内容。 */
     record VectorFile(String model, int dim, Map<String, float[]> vectors) {
@@ -42,14 +55,17 @@ public class JsonKnowledgeStore implements KnowledgeStore {
     private final EmbeddingClient embedder;
     private final Path file;
     private final Path vectorFile;
+    private final double minScore;
     private final Map<String, KnowledgeItem> items = new LinkedHashMap<>();   // id → item(保序 + 去重)
     private final Map<String, float[]> vectors = new LinkedHashMap<>();       // id → 向量
 
     public JsonKnowledgeStore(ObjectMapper mapper, EmbeddingClient embedder,
-                              @Value("${fa.knowledge.file:knowledge/base.json}") String filePath) {
+                              @Value("${fa.knowledge.file:knowledge/base.json}") String filePath,
+                              @Value("${fa.knowledge.min-score:0}") double minScore) {
         this.mapper = mapper;
         this.embedder = embedder;
         this.file = Paths.get(filePath);
+        this.minScore = minScore;
         // base.json → base.vectors.json(向量另存一份,别把知识库本体撑爆)
         this.vectorFile = Paths.get(filePath.replaceAll("\\.json$", "") + ".vectors.json");
         load();
@@ -77,15 +93,14 @@ public class JsonKnowledgeStore implements KnowledgeStore {
             VectorFile vf = mapper.readValue(
                     Files.readString(vectorFile, StandardCharsets.UTF_8), VectorFile.class);
             if (!embedder.modelName().equals(vf.model())) {      // 模型换了 → 旧向量作废
-                System.out.println("[知识库] embedding 模型变了(" + vf.model() + " → "
-                        + embedder.modelName() + "),旧向量作废,下次检索时重算");
+                log.info("embedding 模型变了({} → {}),旧向量作废,下次检索时重算", vf.model(), embedder.modelName());
                 return;
             }
             vf.vectors().forEach((id, v) -> {
                 if (items.containsKey(id)) vectors.put(id, v);
             });
         } catch (IOException e) {
-            System.out.println("[知识库] 向量文件读取失败,将重算:" + e.getMessage());
+            log.warn("向量文件读取失败,将重算:{}", e.getMessage());
         }
     }
 
@@ -101,7 +116,7 @@ public class JsonKnowledgeStore implements KnowledgeStore {
         return List.copyOf(items.values());
     }
 
-    // ---------------------------------------------------------------- 检索
+    // ---------------------------------------------------------------- 检索(hybrid + 阈值)
 
     @Override
     public List<KnowledgeItem> search(String query, int topK) {
@@ -109,23 +124,32 @@ public class JsonKnowledgeStore implements KnowledgeStore {
 
         if (vectors.size() < items.size()) ensureVectors();     // 自愈:服务恢复后自动补齐
 
+        List<String> terms = tokenize(query);
         float[] queryVector = tryEmbed(query);
-        if (queryVector == null) {
-            return keywordSearch(query, topK);                  // 降级:向量服务不可用
-        }
+        boolean hasVector = queryVector != null;
+        if (!hasVector && terms.isEmpty()) return List.of();
 
         List<Scored> scored = new ArrayList<>();
         for (KnowledgeItem item : items.values()) {
             float[] v = vectors.get(item.id());
-            if (v != null) scored.add(new Scored(item, cosine(queryVector, v)));
+            double vectorScore = (hasVector && v != null) ? cosine(queryVector, v) : 0;
+            double keywordScore = keywordScore(item, terms);
+
+            double score = hasVector
+                    ? VECTOR_WEIGHT * vectorScore + (1 - VECTOR_WEIGHT) * keywordScore
+                    : keywordScore;
+            if (score <= 0 || score < minScore) continue;       // 阈值:不够相关就当没找到
+            scored.add(new Scored(item, score));
         }
-        if (scored.isEmpty()) return keywordSearch(query, topK);
 
         scored.sort(Comparator.comparingDouble(Scored::score).reversed());
-        return scored.stream()
-                .limit(Math.max(0, topK))
-                .map(Scored::item)
-                .toList();
+        List<Scored> top = scored.subList(0, Math.min(Math.max(0, topK), scored.size()));
+        if (log.isDebugEnabled()) {
+            top.forEach(s -> log.debug("检索命中 {}(score={}, 向量={})",
+                    s.item().name(), String.format(Locale.ROOT, "%.3f", s.score()),
+                    hasVector ? "开" : "关"));
+        }
+        return top.stream().map(Scored::item).toList();
     }
 
     /** 把条目向量补齐;失败即止(说明服务没开),不逐条傻等。 */
@@ -145,7 +169,7 @@ public class JsonKnowledgeStore implements KnowledgeStore {
             }
             persistVectors();
         } catch (RuntimeException e) {
-            System.out.println("[知识库] embedding 服务不可用,暂用关键词检索:" + e.getMessage());
+            log.warn("embedding 服务不可用,暂用关键词检索:{}", e.getMessage());
         }
     }
 
@@ -155,6 +179,27 @@ public class JsonKnowledgeStore implements KnowledgeStore {
         } catch (RuntimeException e) {
             return null;
         }
+    }
+
+    /** 切词:按空白/标点;中文无空格时退化为整串(再由关键词命中率兜底)。 */
+    private static List<String> tokenize(String query) {
+        List<String> terms = new ArrayList<>();
+        for (String t : query.toLowerCase(Locale.ROOT)
+                .split("[\\s,，。、;；:：!?！?()（）\\[\\]]+")) {
+            if (!t.isBlank()) terms.add(t);
+        }
+        return terms;
+    }
+
+    /** 关键词命中率:命中的词数 / 总词数(0~1)。 */
+    private static double keywordScore(KnowledgeItem item, List<String> terms) {
+        if (terms.isEmpty()) return 0;
+        String haystack = (item.name() + " " + item.detail()).toLowerCase(Locale.ROOT);
+        int hits = 0;
+        for (String t : terms) {
+            if (haystack.contains(t)) hits++;
+        }
+        return (double) hits / terms.size();
     }
 
     /** 余弦相似度:-1~1,越接近 1 越像。 */
@@ -168,31 +213,6 @@ public class JsonKnowledgeStore implements KnowledgeStore {
         }
         if (na == 0 || nb == 0) return 0;
         return dot / (Math.sqrt(na) * Math.sqrt(nb));
-    }
-
-    // ---------------------------------------------------------------- 降级:关键词
-
-    /** 老办法:按空白/标点切词,命中越多分越高(中文无空格时退化为整串子串匹配)。 */
-    private List<KnowledgeItem> keywordSearch(String query, int topK) {
-        String[] terms = query.toLowerCase(Locale.ROOT)
-                .split("[\\s,，。、;；:：!?！?()（）\\[\\]]+");
-        List<KnowledgeItem> scored = new ArrayList<>();
-        List<Integer> scores = new ArrayList<>();
-        for (KnowledgeItem item : items.values()) {
-            String haystack = (item.name() + " " + item.detail()).toLowerCase(Locale.ROOT);
-            int score = 0;
-            for (String t : terms) if (!t.isBlank() && haystack.contains(t)) score++;
-            if (score > 0) { scored.add(item); scores.add(score); }
-        }
-        for (int i = 0; i < scored.size(); i++) {
-            for (int j = i + 1; j < scored.size(); j++) {
-                if (scores.get(j) > scores.get(i)) {
-                    var ti = scored.set(i, scored.get(j)); scored.set(j, ti);
-                    var si = scores.set(i, scores.get(j)); scores.set(j, si);
-                }
-            }
-        }
-        return List.copyOf(scored.subList(0, Math.min(Math.max(0, topK), scored.size())));
     }
 
     // ---------------------------------------------------------------- 落盘
@@ -219,7 +239,7 @@ public class JsonKnowledgeStore implements KnowledgeStore {
                     mapper.writeValueAsString(new VectorFile(embedder.modelName(), dim, vectors)),
                     StandardCharsets.UTF_8);
         } catch (IOException e) {
-            System.out.println("[知识库] 向量落盘失败(不影响本次运行):" + e.getMessage());
+            log.warn("向量落盘失败(不影响本次运行):{}", e.getMessage());
         }
     }
 }

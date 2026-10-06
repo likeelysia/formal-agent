@@ -20,7 +20,7 @@ import org.springframework.stereotype.Component;
  * <p>它自己不再创建容器 —— 依赖全部由 Spring 注入,这就是"从手动 new 到 Boot"的区别。
  */
 @Component
-@ConditionalOnProperty(name = "fa.cli.enabled", havingValue = "true", matchIfMissing = true)
+@ConditionalOnProperty(name = "fa.cli.enabled", havingValue = "true")   // 默认关;Web 模式下不抢 stdin
 public class ChatCli implements CommandLineRunner {
 
     /** 终端里最多显示多少条知识点(剩下的只写进文件,免得刷屏)。 */

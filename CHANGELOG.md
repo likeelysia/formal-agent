@@ -6,6 +6,27 @@
 ## [Unreleased]
 
 ### 新增 / Added
+- **网页前端**:`resources/static/` 下的原生单页界面(无框架、无构建、同源无跨域) ——
+  文字提问 / 上传图片提问 / 知识库概览 / 管理端上传入库;回答下方可展开**工具调用轨迹**
+- **工具集扩展**:`calculator`(自写**受限表达式求值器**—— 只认数字/运算符/白名单函数与常量,不认变量与任何方法调用,杜绝 `eval` 注入)、
+  `unit_convert`(长度/质量/时间/角度/温度,认中英文单位名)
+- **混合检索(hybrid)+ 阈值**:向量相似度与关键词命中率加权(`0.7 / 0.3`),
+  低于 `fa.knowledge.min-score`(默认 0.35)当作未命中 —— 从源头减少“硬塞不相干内容”
+- **Prompt 模板外置**:提示词搬到 `resources/prompts/*.txt` + `prompt.Prompts` 加载器(带缓存、缺失 fail-fast)
+- **接口支持图片**:`POST /api/agent`(multipart)上传图片 → 视觉识别 → Agent 回答
+- **接口鉴权**:`AdminKeyInterceptor` + `WebConfig`;管理接口需 `X-Admin-Key`
+  (从环境变量 `FA_ADMIN_KEY` 读;**未配置 = 关闭并打 WARN**,适合本地开发)
+- **Agent 化(工具调用 / ReAct)**:
+  - `agent/Tool` 抽象(名字 + 说明 + JSON Schema 参数 + execute);
+  - 三个只读工具:`search_knowledge`(语义检索)、`knowledge_overview`(全局概况)、`get_knowledge_page`(按来源+页码精确取);
+  - `agent/AgentService`:跑“思考 → 调工具 → 再思考”循环,**带步数上限**与**工具调用轨迹(trace)**;
+  - `POST /api/agent`(取代原 `POST /api/qa`);
+  - 工具协议 DTO:`ToolCall` / `ToolDefinition` / `AgentMessage`(含 `tool_calls` / `tool_call_id`)/ `AssistantTurn`
+- **HTTP 接口(REST)**:`spring-boot-starter-web` + 内嵌 Tomcat;
+  `POST /api/qa`(问答)、`POST /api/ingest`(入库)、`GET /api/knowledge`、`GET /api/health`;
+  统一异常处理(`@RestControllerAdvice` → 规范的 JSON 错误 + 状态码)
+- **日志规范化**:`logback-spring.xml`(控制台 + 应用日志按天滚动 + **单独的模型调用审计日志**);
+  `println` → SLF4J;`ApiLogger` 由手写文件追加重写为一行 logger 调用
 - **知识库**:`KnowledgeItem` / `KnowledgeStore`(接口) / `JsonKnowledgeStore`(JSON 落盘,换实现不动业务)
 - **入库流水线**:`IngestService` + `IngestMain` —— 文档 → 知识点(带页码出处)→ 知识库
 - **文档读取抽象化**:`DocumentReader.read` 返回带位置的文本段(`TextSegment`);`ReaderRegistry` 按扩展名分派
@@ -22,11 +43,19 @@
 - 单元测试 **54 → 74**(新增向量检索、图片读取、PDF 双策略、配置绑定等)
 
 ### 变更 / Changed
+- **接口调整**:移除 `POST /api/qa`,由能力更强的 **`POST /api/agent`** 取代(不保留并列入口)
+- **默认启动形态**:由“交互式命令行”改为 **HTTP 服务**(8080);CLI 需显式开启 `--fa.cli.enabled=true`
 - **配置**:`config.properties` → **`application.yml`**(前缀 `fa.*`);`@Value` → **`@ConfigurationProperties`**
   (`AppConfig` 由散字段类改为 **record + 分组**),支持 profile 与环境变量覆盖
 - **入口**:手动 `new AnnotationConfigApplicationContext(...)` → Boot `SpringApplication.run(...)`
 - **视觉请求关闭"思考模式"**(`thinking.type = "disabled"`):OCR 场景更快(约 51s → 16s)且输出更稳
 - 超时:LLM 请求读取超时提升到 **120s**(视觉 OCR 单页耗时较长);连接超时独立为 `fa.llm.connect-timeout-seconds`
+
+### 安全 / Security
+- **修复「任意文件读取 / 路径遍历」**:`POST /api/ingest` 由“传路径”改为 **上传文件**(multipart/form-data);
+  新增 `FileStorage`(清洗文件名 + 扩展名白名单 + 固定目录 + 时间戳唯一化 + normalize 后前缀校验),
+  并新增 4 条安全单元测试(路径遍历 / 绝对路径 / 白名单 / 落盘)
+- 统一异常处理不再把框架异常(415 / 404 / 405 等)压成 500,保留正确状态码
 
 ### 修复 / Fixed
 - **Kimi 视觉 `content` 偶发为空**(思考模式下答案全跑进 `reasoning_content`)→ 关闭思考 + 空内容按瞬时故障重试

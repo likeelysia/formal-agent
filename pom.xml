@@ -66,6 +66,12 @@
             <artifactId>spring-boot-starter</artifactId>
         </dependency>
 
+        <!-- Web:内嵌 Tomcat + Spring MVC(@RestController / @PostMapping ...) -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+
         <!-- 重试(AOP 切面式) -->
         <dependency>
             <groupId>org.springframework.retry</groupId>

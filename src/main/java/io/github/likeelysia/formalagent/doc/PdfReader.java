@@ -2,6 +2,7 @@ package io.github.likeelysia.formalagent.doc;
 
 import io.github.likeelysia.formalagent.exception.AgentException;
 import io.github.likeelysia.formalagent.llm.VisionClient;
+import io.github.likeelysia.formalagent.prompt.Prompts;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -13,6 +14,8 @@ import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.rendering.PDFRenderer;
 import org.apache.pdfbox.text.PDFTextStripper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 /**
@@ -24,15 +27,15 @@ import org.springframework.stereotype.Component;
 @Component
 public class PdfReader implements DocumentReader {
 
+    private static final Logger log = LoggerFactory.getLogger(PdfReader.class);
+
     /** OCR 渲染精度(DPI):越高越清晰,但图越大越慢越贵 */
     private static final float OCR_DPI = 200f;
 
     /** 页与页之间的停顿(毫秒):规避 Moonshot「组织并发上限 = 1」限流 */
     private static final long OCR_PAGE_GAP_MS = 1500;
 
-    private static final String OCR_PROMPT =
-            "请提取这张图片中的所有文字,原样输出;不要翻译、不要解释、不要添加任何说明。"
-                    + "如果图中没有文字,只输出一个空字符串。";
+    // OCR 提示词已外置到 resources/prompts/pdf-ocr.txt
 
     private final VisionClient vision;
 
@@ -84,21 +87,21 @@ public class PdfReader implements DocumentReader {
             Path tmp = Files.createTempFile("pdf-page-", ".jpg");
             try {
                 ImageIO.write(image, "jpg", tmp.toFile());
-                String text = vision.ask(tmp, OCR_PROMPT);
+                String text = vision.ask(tmp, Prompts.get("pdf-ocr"));
                 int len = (text == null) ? 0 : text.trim().length();
-                System.out.println("[OCR] 第 " + (i + 1) + "/" + pages + " 页 → " + len + " 字");
+                log.info("[OCR] 第 {}/{} 页 → {} 字", i + 1, pages, len);
                 if (len > 0) {
                     segments.add(new TextSegment(text, "第 " + (i + 1) + " 页"));
                 }
             } catch (AgentException e) {                        // ← 单页失败不再拖垮整本
                 failed.add(i + 1);
-                System.out.println("[OCR] 第 " + (i + 1) + " 页失败,已跳过:" + e.getMessage());
+                log.warn("[OCR] 第 {} 页失败,已跳过:{}", i + 1, e.getMessage());
             } finally {
                 Files.deleteIfExists(tmp);
             }
         }
         if (!failed.isEmpty()) {
-            System.out.println("[OCR] ⚠ 有 " + failed.size() + " 页没成功:" + failed + "(可稍后单独重跑)");
+            log.warn("[OCR] 有 {} 页没成功:{}(可稍后单独重跳)", failed.size(), failed);
         }
         return segments;
     }

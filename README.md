@@ -39,13 +39,22 @@ semantic (embedding) retrieval** over that knowledge base — with citations.
 - **语义检索(真 RAG 的第一步)**:知识点 → **embedding 向量**,检索按**余弦相似度**取 top-K;
   embedding 服务不可用时**自动降级**为关键词匹配(不会因此搜不了)
 - **带出处的问答**:图片 → 识图 → 检索 → 「只依据知识点」生成回答 + 【出处】
+- **Agent 化(工具调用 / ReAct)**:把"检索"交给模型当**工具**,由它自己决定**查不查、查几次、查什么**;
+  响应里带 `trace`(它到底调了哪些工具) —— 从"固定流水线"变成"会自己拿主意的 Agent"
+- **工具集**:`search_knowledge` / `knowledge_overview` / `get_knowledge_page` / **`calculator`**(自写安全表达式求值器)/ **`unit_convert`**
+- **混合检索 + 阈值**:向量 + 关键词加权;相似度不够就当作“没找到”(`fa.knowledge.min-score`)
+- **图片问答**:`POST /api/agent` 支持上传图片(multipart)→ 视觉识别 → Agent 回答
+- **接口鉴权**:管理接口(`/api/ingest`)需请求头 `X-Admin-Key`
+- **Prompt 模板外置**:文案在 `resources/prompts/*.txt`
+- **网页前端**:内置单页问答界面(`http://localhost:8080/`)—— 文字提问 / 上传图片提问 / 看知识库 / 管理端上传入库
 - **多轮对话**:保留历史上下文,与 DeepSeek 循环对话
 - **会话存档**:Java 原生序列化(`.bin`)+ 可读 JSON 导出(`.json`)
 - **结构化输出**:调用时开启 JSON mode(`response_format=json_object`)
 - **健壮性**:超时 + **重试 + 退避**(Spring Retry / AOP);音频类长任务失败可跳过
 - **配置**:`application.yml` + `@ConfigurationProperties`(类型安全)+ **profile**
-- **调用日志**:按天追加到 `logs/api-YYYY-MM-DD.log`
-- **Spring Boot 工程化**:可执行 fat jar(`java -jar`)、内嵌日志(SLF4J/Logback)
+- **调用日志**:按天滚动到 `logs/api-YYYY-MM-DD.log`(经 SLF4J/Logback)
+- **HTTP 接口(REST)**:`POST /api/qa`、`POST /api/ingest`、`GET /api/knowledge`、`GET /api/health`
+- **Spring Boot 工程化**:可执行 fat jar(`java -jar`)、内嵌 Tomcat、内嵌日志(SLF4J/Logback)
 - **单元测试**:**74 个**,含 Boot 容器冒烟测试与配置绑定测试(不联网、秒级)
 
 ---
@@ -57,6 +66,7 @@ semantic (embedding) retrieval** over that knowledge base — with citations.
 | Java | 17+ | 编译 `release=17`,JDK 17 及以上均可 |
 | Maven | 3.9+ | 构建与依赖管理(含 Maven Wrapper) |
 | **Spring Boot** | **3.5.16** | 自动配置 / 可执行 jar / 内嵌日志(底层 Spring 6) |
+| Spring Boot Web | (Boot BOM 管) | **内嵌 Tomcat + Spring MVC**(REST 接口) |
 | Spring Retry | (Boot BOM 管) | 声明式重试(`@Retryable` + AOP) |
 | Jackson | (Boot BOM 管) | JSON 序列化 / 反序列化 |
 | Apache PDFBox | 3.0.8 | PDF 文字层提取 + 逐页渲染(供 OCR) |
@@ -95,19 +105,24 @@ start-embedding.bat          # 起在 http://127.0.0.1:8090
 ### 构建与运行
 
 ```bash
-mvn clean test               # 跑测试(74 个)
+mvn clean test               # 跑测试(99 个)
 mvn clean package            # 打包 → target/formal-agent-0.1.0-SNAPSHOT.jar
 
-# 可执行 jar(推荐)
+# 【默认】启动 HTTP 服务(内嵌 Tomcat,端口 8080)
 java -jar target/formal-agent-0.1.0-SNAPSHOT.jar
 
-# 带 profile(dev 会打开调试输出)
+# 交互式命令行(想聊天/传文件时)
+java -jar target/formal-agent-0.1.0-SNAPSHOT.jar --fa.cli.enabled=true
+
+# 带 profile(dev 打开调试输出)
 java -jar target/formal-agent-0.1.0-SNAPSHOT.jar --spring.profiles.active=dev
 ```
 
 也可以在 IDEA 里直接运行 `FormalAgentApplication`(绿色 ▶)。
 
-### 命令行怎么用
+启动后浏览器打开 <http://localhost:8080/> —— 就是网页问答界面。
+
+### 命令行怎么用(需 `--fa.cli.enabled=true`)
 
 启动后是交互式提示符:
 
@@ -118,6 +133,34 @@ java -jar target/formal-agent-0.1.0-SNAPSHOT.jar --spring.profiles.active=dev
 
 > 批量入库(把教材灌进 `knowledge/base.json`)目前用 `cli.IngestMain`,在 IDEA 里运行;
 > 后续会做成 HTTP 接口(见路线图)。
+
+---
+
+## HTTP 接口 / REST API
+
+默认启动即为 HTTP 服务(`http://localhost:8080`)。
+
+| 方法 & 路径 | 作用 | 请求体示例 |
+|---|---|---|
+| `POST /api/agent` | **Agent 问答**(模型自己决定调哪些工具) | `{"question":"位移是多少?"}` → 返回 `answer` + `steps` + `trace` |
+| `POST /api/agent`(multipart) | **图片问答**:上传图片 → 视觉识别 → Agent 回答 | `file=@题目.png`(+ 可选 `question`) |
+| `POST /api/ingest` | 教材入库(管理端)—— **上传文件**,不收“路径” | `multipart/form-data`,`file=@物理.pdf` |
+| `GET /api/knowledge` | 知识库概况 | `?sample=5` |
+| `GET /api/health` | 健康检查 | — |
+
+```powershell
+# 问一句(Agent 自己决定要不要查、查几次)
+curl -X POST http://localhost:8080/api/agent -H "Content-Type: application/json" ^
+     -d "{\"question\":\"沿闭合曲线跑一圈回到原点,位移是多少?\"}"
+
+# 看知识库
+curl http://localhost:8080/api/knowledge?sample=3
+
+# 入库(上传文件;接口**不接受“路径”参数**,从根本上堵死任意文件读取)
+curl -F "file=@C:/资料/物理.pdf" http://localhost:8080/api/ingest
+```
+
+> 端口的改法:`--server.port=9000`,或改 `application.yml` 的 `server.port`。
 
 ---
 
@@ -134,11 +177,15 @@ src/main/java/io/github/likeelysia/formalagent/
 ├── llm/        # LlmClient、VisionClient、EmbeddingClient(+ 各自实现与 dto/)
 ├── knowledge/  # KnowledgeItem / KnowledgeStore / JsonKnowledgeStore —— 知识库与向量检索
 ├── log/        # ApiLogger —— 模型调用审计日志
-├── service/    # ChatService(对话)、QaService(图片问答)
+├── agent/      # Agent 主循环(ReAct)+ 工具(Tool 接口 / search_knowledge / knowledge_overview / get_knowledge_page)
+├── service/    # ChatService(对话)、QaService(图片问答)、FileStorage(上传落盘)
+├── web/        # Controller(REST 接口)+ 统一异常处理
 └── store/      # SessionStore —— 存档 / 读档 / 导出
 ```
 
-配置在 `src/main/resources/application.yml`(前缀 `fa.*`)。
+配置在 `src/main/resources/application.yml`(前缀 `fa.*`);
+前端页面在 `src/main/resources/static/`(`index.html` / `app.js` / `style.css`);
+提示词在 `src/main/resources/prompts/`。
 
 ---
 
@@ -148,7 +195,7 @@ src/main/java/io/github/likeelysia/formalagent/
 
 - 密钥通过**环境变量**提供(`DEEPSEEK_API_KEY` / `MOONSHOT_API_KEY`);
 - `.gitignore` 已屏蔽 `.env`、`*.local.properties`、`secrets/`、`*.pem`、`*.key` 等敏感文件;
-- 知识库数据(`knowledge/`)与调用日志(`logs/`)同样不入库。
+- 知识库数据(`knowledge/`)、上传文件(`data/`)与调用日志(`logs/`)同样不入库。
 
 This project calls LLM APIs. **No API keys are committed**: keys come from environment
 variables, and `.gitignore` blocks common secret files as well as generated data.
@@ -168,9 +215,17 @@ variables, and `.gitignore` blocks common secret files as well as generated data
 - [x] 图片问答(识图 → 检索 → 带出处回答)
 - [x] **真检索:embedding + 余弦相似度 top-K**(本地 llama.cpp)
 - [x] **Spring Boot 化:可执行 jar / `@ConfigurationProperties` / profile**
-- [ ] 日志规范(SLF4J/Logback 全量替换 `println`)
-- [ ] HTTP 接口(REST:问答 / 入库 / 健康检查)
-- [ ] 工具调用(Function Calling)+ ReAct
+- [x] **日志规范(SLF4J/Logback,按天滚动)**
+- [x] **HTTP 接口(REST:问答 / 入库 / 知识库 / 健康检查)**
+- [x] **入库接口改为文件上传**(堵死“任意文件读取 / 路径遍历”)
+- [x] **Agent 化:工具调用(Function Calling)+ ReAct 循环**
+- [x] **工具集**:`search_knowledge` / `knowledge_overview` / `get_knowledge_page` / `calculator` / `unit_convert`
+- [x] **hybrid 检索(向量 + 关键词)+ 相似度阈值**
+- [x] **接口支持图片**(multipart 上传)
+- [x] **管理接口鉴权**(`X-Admin-Key`)
+- [x] **Prompt 模板外置**(`resources/prompts/*.txt`)
+- [ ] 更多工具(联网搜索 —— 需配 Prompt Injection 防护)
+- [ ] 向量库(知识到 10 万条量级再上)
 - [ ] 向量库 / 阈值 + hybrid(向量 + 关键词)
 - [ ] Prompt 模板外置
 

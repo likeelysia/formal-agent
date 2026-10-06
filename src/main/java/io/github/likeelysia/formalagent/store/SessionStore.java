@@ -10,6 +10,8 @@ import java.nio.file.Paths;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import io.github.likeelysia.formalagent.chat.ChatSession;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 /**
@@ -27,6 +29,8 @@ import org.springframework.stereotype.Component;
  */
 @Component
 public class SessionStore {
+
+    private static final Logger log = LoggerFactory.getLogger(SessionStore.class);
 
     /** 默认存放目录:sessions/(程序正常运行时用这个) */
     private static final Path DEFAULT_DIR = Paths.get("sessions");
@@ -52,9 +56,9 @@ public class SessionStore {
             try (ObjectOutputStream out = new ObjectOutputStream(Files.newOutputStream(file))) {
                 out.writeObject(session);        // ★ 一次把整个对象写进去
             }
-            System.out.println("[SessionStore] 已存档:" + file.toAbsolutePath());
+            log.info("已存档:{}", file.toAbsolutePath());
         } catch (IOException e) {
-            System.err.println("[SessionStore] 存档失败:" + e.getMessage());
+            log.warn("存档失败:{}", e.getMessage());
         }
     }
 
@@ -75,7 +79,7 @@ public class SessionStore {
             return (ChatSession) in.readObject(); // ★ 反序列化,要强转成 ChatSession
         } catch (IOException | ClassNotFoundException e) {
             // ClassNotFoundException 是 readObject 会抛的受检异常,必须一起处理
-            System.err.println("[SessionStore] 读档失败:" + e.getMessage());
+            log.warn("读档失败:{}", e.getMessage());
             return null;
         }
     }
@@ -94,9 +98,9 @@ public class SessionStore {
             Path file = dir.resolve(session.getName() + ".json");
             mapper.writerWithDefaultPrettyPrinter()          // 缩进美化,方便人看
                     .writeValue(file.toFile(), session.getMessages());
-            System.out.println("[SessionStore] 已导出可读版:" + file.toAbsolutePath());
+            log.info("已导出可读版:{}", file.toAbsolutePath());
         } catch (IOException e) {
-            System.err.println("[SessionStore] 导出 JSON 失败:" + e.getMessage());
+            log.warn("导出 JSON 失败:{}", e.getMessage());
         }
     }
 }
