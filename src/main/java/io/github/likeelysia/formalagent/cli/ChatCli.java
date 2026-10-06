@@ -1,37 +1,50 @@
 package io.github.likeelysia.formalagent.cli;
 
-import io.github.likeelysia.formalagent.config.SpringConfig;
 import io.github.likeelysia.formalagent.exception.AgentException;
 import io.github.likeelysia.formalagent.extract.ExtractService;
 import io.github.likeelysia.formalagent.extract.KnowledgePoint;
 import io.github.likeelysia.formalagent.extract.KnowledgeReport;
 import io.github.likeelysia.formalagent.service.ChatService;
+import io.github.likeelysia.formalagent.service.QaService;
 import io.github.likeelysia.formalagent.store.SessionStore;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Scanner;
-import org.springframework.context.annotation.AnnotationConfigApplicationContext;
-import io.github.likeelysia.formalagent.service.QaService;
+import org.springframework.boot.CommandLineRunner;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.stereotype.Component;
 
-public class Main {
+/**
+ * 交互式命令行:应用启动后由 Boot 调起(等价于原来的 {@code Main})。
+ *
+ * <p>它自己不再创建容器 —— 依赖全部由 Spring 注入,这就是"从手动 new 到 Boot"的区别。
+ */
+@Component
+@ConditionalOnProperty(name = "fa.cli.enabled", havingValue = "true", matchIfMissing = true)
+public class ChatCli implements CommandLineRunner {
 
     /** 终端里最多显示多少条知识点(剩下的只写进文件,免得刷屏)。 */
     private static final int MAX_SHOW = 15;
 
-    public static void main(String[] args) {
-        // ① 启动 Spring 容器
-        AnnotationConfigApplicationContext ctx =
-                new AnnotationConfigApplicationContext(SpringConfig.class);
+    private final ChatService service;
+    private final ExtractService extractService;
+    private final KnowledgeReport report;
+    private final QaService qaService;
+    private final SessionStore sessionStore;
 
-        // ② 一次拿齐三个"服务":聊天 + 提取 + 渲染
-        ChatService service = ctx.getBean(ChatService.class);
-        ExtractService extractService = ctx.getBean(ExtractService.class);
-        KnowledgeReport report = ctx.getBean(KnowledgeReport.class);
-        QaService qaService = ctx.getBean(QaService.class);
+    public ChatCli(ChatService service, ExtractService extractService, KnowledgeReport report,
+                   QaService qaService, SessionStore sessionStore) {
+        this.service = service;
+        this.extractService = extractService;
+        this.report = report;
+        this.qaService = qaService;
+        this.sessionStore = sessionStore;
+    }
 
+    @Override
+    public void run(String... args) {
         System.out.println("提示:直接说话=聊天;粘 .md/.txt/.pdf=提取知识点;粘图片(.png/.jpg)=对照知识库回答。输入 exit 退出。");
 
-        // ③ 循环
         Scanner scanner = new Scanner(System.in);
         while (true) {
             System.out.print("你 > ");
@@ -43,9 +56,9 @@ public class Main {
             Path file = FileHint.asReadableFile(line);     // ④ 先问一句:这是文件吗?
             if (file != null) {
                 if (FileHint.isImage(file)) {
-                    askAboutImage(file, qaService);        // 图片 → 对照知识库回答
+                    askAboutImage(file);                   // 图片 → 对照知识库回答
                 } else {
-                    extractFile(file, extractService, report); // 文档 → 提取知识点
+                    extractFile(file);                     // 文档 → 提取知识点
                 }
                 continue;
             }
@@ -57,16 +70,13 @@ public class Main {
             }
         }
 
-        // ⑤ 存档 + 关容器(SessionStore 现在是 bean,从容器取)
-        SessionStore store = ctx.getBean(SessionStore.class);
-        store.save(service.getSession());
-        store.exportJson(service.getSession());
+        sessionStore.save(service.getSession());
+        sessionStore.exportJson(service.getSession());
         scanner.close();
-        ctx.close();
     }
 
     /** 文件 → 块 → 逐块提取 → 合并去重 → 写文件 + 终端显示前几条。 */
-    private static void extractFile(Path file, ExtractService extractService, KnowledgeReport report) {
+    private void extractFile(Path file) {
         System.out.println("(识别到文件,正在提取,请稍等…)");
         try {
             List<KnowledgePoint> points = extractService.extractFile(file);
@@ -89,8 +99,9 @@ public class Main {
             System.out.println("[出错] " + e.getMessage());
         }
     }
+
     /** 图片 → 对照知识库回答。 */
-    private static void askAboutImage(Path image, QaService qaService) {
+    private void askAboutImage(Path image) {
         System.out.println("(识别到图片,正在对照知识库回答,请稍等…)");
         try {
             System.out.println("AI > " + qaService.ask(image));

@@ -34,15 +34,15 @@ public class MoonshotVisionClient implements VisionClient {
         this.config = config;
         this.mapper = mapper;
         this.client = HttpClient.newBuilder()
-                .connectTimeout(Duration.ofSeconds(config.timeoutSeconds()))
+                .connectTimeout(Duration.ofSeconds(config.llm().connectTimeoutSeconds()))
                 .build();
     }
 
     @Retryable(
             value = TransientApiException.class,
-            maxAttemptsExpression = "${llm.maxAttempts:5}",
-            backoff = @Backoff(delayExpression = "${llm.retryBaseMs:2000}",
-                    maxDelayExpression = "${llm.retryMaxMs:20000}",
+            maxAttemptsExpression = "${fa.llm.max-attempts:5}",
+            backoff = @Backoff(delayExpression = "${fa.llm.retry-base-ms:2000}",
+                    maxDelayExpression = "${fa.llm.retry-max-ms:20000}",
                     multiplier = 2.0, random = false))
     @Override
     public String ask(Path image, String prompt) {
@@ -53,18 +53,18 @@ public class MoonshotVisionClient implements VisionClient {
         try {
             String dataUrl = toDataUrl(image);
             String body = mapper.writeValueAsString(new VisionRequest(
-                    config.visionModel(),
+                    config.vision().model(),
                     List.of(new VisionRequest.VisionMessage("user", List.of(
                             VisionRequest.ContentPart.image(dataUrl),
                             VisionRequest.ContentPart.text(prompt)))),
-                    config.visionMaxTokens(),
+                    config.vision().maxTokens(),
                     VisionRequest.Thinking.DISABLED));      // ← 关思考:OCR 不需要“想”
 
             HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(config.visionApiUrl()))
+                    .uri(URI.create(config.vision().apiUrl()))
                     .header("Content-Type", "application/json")
                     .header("Authorization", "Bearer " + apiKey)
-                    .timeout(Duration.ofSeconds(config.requestTimeoutSeconds()))
+                    .timeout(Duration.ofSeconds(config.llm().requestTimeoutSeconds()))
                     .POST(HttpRequest.BodyPublishers.ofString(body))
                     .build();
 
@@ -72,7 +72,7 @@ public class MoonshotVisionClient implements VisionClient {
             HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
             long cost = System.currentTimeMillis() - start;
 
-            ApiLogger.record(config.visionModel(), response.statusCode(), cost,
+            ApiLogger.record(config.vision().model(), response.statusCode(), cost,
                     body.length(), response.body().length());
 
             int code = response.statusCode();

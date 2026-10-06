@@ -46,7 +46,7 @@ public class JsonKnowledgeStore implements KnowledgeStore {
     private final Map<String, float[]> vectors = new LinkedHashMap<>();       // id → 向量
 
     public JsonKnowledgeStore(ObjectMapper mapper, EmbeddingClient embedder,
-                              @Value("${knowledge.file:knowledge/base.json}") String filePath) {
+                              @Value("${fa.knowledge.file:knowledge/base.json}") String filePath) {
         this.mapper = mapper;
         this.embedder = embedder;
         this.file = Paths.get(filePath);

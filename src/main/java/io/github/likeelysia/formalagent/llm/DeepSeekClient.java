@@ -30,16 +30,16 @@ public class DeepSeekClient implements LlmClient {
         this.config = config;
         this.mapper = mapper;
         this.client = HttpClient.newBuilder()
-                .connectTimeout(Duration.ofSeconds(config.timeoutSeconds()))
+                .connectTimeout(Duration.ofSeconds(config.llm().connectTimeoutSeconds()))
                 .build();
     }
 
     @Retryable(
             value = TransientApiException.class,          // 只重试"瞬时故障"
-            maxAttemptsExpression = "${llm.maxAttempts:5}",  // 总尝试次数
+            maxAttemptsExpression = "${fa.llm.max-attempts:5}",  // 总尝试次数
             backoff = @Backoff(
-                    delayExpression = "${llm.retryBaseMs:2000}",  // 退避基数
-                    maxDelayExpression = "${llm.retryMaxMs:20000}",// 退避上限
+                    delayExpression = "${fa.llm.retry-base-ms:2000}",  // 退避基数
+                    maxDelayExpression = "${fa.llm.retry-max-ms:20000}",// 退避上限
                     multiplier = 2.0,                            // 指数:2000→4000→8000…
                     random = false))                             // 确定退避(限流场景随机可能退到 0ms)
     @Override
@@ -50,14 +50,14 @@ public class DeepSeekClient implements LlmClient {
         }
         try {
             String body = mapper.writeValueAsString(new ChatRequest(
-                    config.model(), history, config.maxTokens(),
+                    config.deepseek().model(), history, config.deepseek().maxTokens(),
                     options.jsonMode() ? ChatRequest.ResponseFormat.JSON : null));
 
             HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(config.apiUrl()))
+                    .uri(URI.create(config.deepseek().apiUrl()))
                     .header("Content-Type", "application/json")
                     .header("Authorization", "Bearer " + apiKey)
-                    .timeout(Duration.ofSeconds(config.requestTimeoutSeconds()))   // ← 新增:读取超时
+                    .timeout(Duration.ofSeconds(config.llm().requestTimeoutSeconds()))   // ← 读取超时
                     .POST(HttpRequest.BodyPublishers.ofString(body))
                     .build();
 
@@ -65,7 +65,7 @@ public class DeepSeekClient implements LlmClient {
             HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
             long cost = System.currentTimeMillis() - start;
 
-            ApiLogger.record(config.model(), response.statusCode(), cost,
+            ApiLogger.record(config.deepseek().model(), response.statusCode(), cost,
                     body.length(), response.body().length());
             if (config.debug()) System.out.println("[debug] 请求体:" + body);
 

@@ -1,0 +1,57 @@
+## ============================================================================
+##  Formal Agent 配置(Spring Boot 自动从 classpath 根读取 application.yml)
+##  · fa.* 前缀绑定到 AppConfig(@ConfigurationProperties)
+##  · ${ENV_VAR:默认值} 写法 = 允许用环境变量覆盖
+## ============================================================================
+fa:
+  debug: false
+
+  # ---- 调用 LLM 的通用参数(超时 / 重试)----
+  llm:
+    request-timeout-seconds: 120
+    connect-timeout-seconds: 30
+    max-attempts: 5
+    retry-base-ms: 2000
+    retry-max-ms: 20000
+
+  # ---- DeepSeek:文本对话 / 知识点提炼 ----
+  deepseek:
+    api-url: https://api.deepseek.com/chat/completions
+    model: deepseek-chat
+    max-tokens: 8192
+
+  # ---- Kimi 视觉:PDF 扫描件 OCR / 图片问答 ----
+  vision:
+    api-url: https://api.moonshot.cn/v1/chat/completions
+    model: kimi-k2.6
+    max-tokens: 4096
+
+  # ---- 本地 embedding 服务(llama.cpp llama-server)----
+  embedding:
+    url: ${FA_EMBEDDING_URL:http://127.0.0.1:8090}
+    model: bge-small-zh-v1.5
+
+  # ---- 知识库 ----
+  knowledge:
+    file: ${FA_KNOWLEDGE_FILE:knowledge/base.json}
+
+  # ---- 教材切块 ----
+  extract:
+    chunk-size: 800
+    overlap: 100
+
+  # ---- 图片问答检索条数 ----
+  qa:
+    top-k: 5
+
+---
+## ============================================================================
+##  dev profile:--spring.profiles.active=dev
+##  用法示例:java -jar app.jar --spring.profiles.active=dev
+## ============================================================================
+spring:
+  config:
+    activate:
+      on-profile: dev
+fa:
+  debug: true

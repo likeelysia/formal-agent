@@ -16,7 +16,7 @@ public class TextSplitter {
     private final int chunkSize;         // 每块最多多少字符
     private final int overlap;           // 相邻块重叠多少字符(防止关键句被切断)
 
-    public TextSplitter(@Value("${extract.chunkSize:800}")int chunkSize, @Value("${extract.overlap:100}")int overlap) {
+    public TextSplitter(@Value("${fa.extract.chunk-size:800}")int chunkSize, @Value("${fa.extract.overlap:100}")int overlap) {
         if (chunkSize <= 0) throw new IllegalArgumentException("chunkSize 必须大于 0,当前是 " + chunkSize);
         if (overlap < 0) throw new IllegalArgumentException("overlap 不能是负数,当前是 " + overlap);
         if (overlap >= chunkSize) throw new IllegalArgumentException(

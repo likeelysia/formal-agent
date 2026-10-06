@@ -43,7 +43,7 @@ public class LocalEmbeddingClient implements EmbeddingClient {
 
     @Override
     public String modelName() {
-        return config.embeddingModel();
+        return config.embedding().model();
     }
 
     @Override
@@ -63,11 +63,11 @@ public class LocalEmbeddingClient implements EmbeddingClient {
     private List<float[]> embedBatch(List<String> texts) {
         if (texts.isEmpty()) return List.of();
         try {
-            String body = mapper.writeValueAsString(new EmbeddingRequest(config.embeddingModel(), texts));
+            String body = mapper.writeValueAsString(new EmbeddingRequest(config.embedding().model(), texts));
             HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(config.embeddingUrl() + "/v1/embeddings"))
+                    .uri(URI.create(config.embedding().url() + "/v1/embeddings"))
                     .header("Content-Type", "application/json")
-                    .timeout(Duration.ofSeconds(config.requestTimeoutSeconds()))
+                    .timeout(Duration.ofSeconds(config.llm().requestTimeoutSeconds()))
                     .POST(HttpRequest.BodyPublishers.ofString(body))
                     .build();
 

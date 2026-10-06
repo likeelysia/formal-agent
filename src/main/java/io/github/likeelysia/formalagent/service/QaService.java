@@ -34,7 +34,7 @@ public class QaService {
     private final int topK;
 
     public QaService(VisionClient vision, KnowledgeStore store, LlmClient llm,
-                     @Value("${qa.topK:5}") int topK) {
+                     @Value("${fa.qa.top-k:5}") int topK) {
         this.vision = vision;
         this.store = store;
         this.llm = llm;

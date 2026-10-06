@@ -8,7 +8,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
+import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.retry.annotation.Backoff;
 import org.springframework.retry.annotation.EnableRetry;
 import org.springframework.retry.annotation.Retryable;
@@ -16,7 +16,7 @@ import org.springframework.retry.annotation.Retryable;
 /** 验证 @Retryable(AOP 重试切面)确实生效:靠一个"前两次必失败、第三次成功"的测试 bean。 */
 class RetryBehaviorTest {
 
-    @Configuration
+    @TestConfiguration          // 用 @TestConfiguration:不会被 @SpringBootTest 的组件扫描挑中(否则同名 bean 冲突)
     @EnableRetry
     static class RetryTestConfig {
         @Bean
@@ -62,18 +62,11 @@ class RetryBehaviorTest {
     @DisplayName("非 retryFor 的异常 → 只调用 1 次(不重试)")
     void doesNotRetryOtherExceptions() {
         try (AnnotationConfigApplicationContext ctx =
-                     new AnnotationConfigApplicationContext(RetryConfig.class)) {   // 见下
+                     new AnnotationConfigApplicationContext(RetryTestConfig.class)) {   // 复用它即可
             FlakyService service = ctx.getBean(FlakyService.class);
 
             assertThrows(IllegalArgumentException.class, service::alwaysBad);
             assertEquals(1, service.badCalls());
         }
-    }
-
-    @Configuration
-    @EnableRetry
-    static class RetryConfig {           // 第二条测试也可复用 RetryTestConfig,这里只为写法完整
-        @Bean
-        public FlakyService flakyService() { return new FlakyService(); }
     }
 }
